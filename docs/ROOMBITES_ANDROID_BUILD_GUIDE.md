@@ -71,18 +71,31 @@ javac -version
 
 ## 4. Building the Web Application & Syncing Android Assets
 
-Before compiling the Android project, ensure the web frontend assets are bundled and synchronized with the Capacitor native project:
+Before compiling the Android project, ensure the web frontend assets are bundled with the target API server URL and synchronized with the Capacitor native project:
 
 ```powershell
-# 1. Navigate to web application directory
+# 1. Start the RoomBites Backend API (in a separate terminal)
+cd d:\RoomBites\backend
+npm run dev
+# Backend runs on http://0.0.0.0:4000 (accessible locally and over LAN)
+
+# 2. Navigate to web application directory
 cd d:\RoomBites\apps\web
 
-# 2. Compile frontend production bundle (TypeScript + Vite)
-npm run build
+# 3. Compile frontend bundle with Android mode (points to your PC's LAN IP e.g. http://172.16.9.243:4000)
+npm run build:android
 
-# 3. Synchronize compiled web assets into Android project
+# 4. Synchronize compiled web assets and Capacitor configuration
 npx cap sync android
 ```
+
+> [!TIP]
+> **Connecting via USB (ADB Reverse):**
+> If your phone is connected via USB, you can forward traffic so `localhost:4000` on the phone routes to your PC:
+> ```powershell
+> adb reverse tcp:4000 tcp:4000
+> ```
+> You can also tap the Wi-Fi icon in the app header to open **Server Settings** and switch between Wi-Fi LAN IP, ADB localhost, or a custom backend address at runtime without rebuilding the APK.
 
 This updates:
 - Web assets to: `apps/web/android/app/src/main/assets/public/`
@@ -177,7 +190,9 @@ adb shell am start -n in.ac.rit.roombites/in.ac.rit.roombites.MainActivity
 | :--- | :--- | :--- |
 | **Android Project Configuration** | **SUCCESS** | Capacitor 7 project properly structured with package `in.ac.rit.roombites`, assets synced, permissions configured. |
 | **Android SDK Verification** | **SUCCESS** | SDK Level 35, Build-Tools 35.0.0, Platform-Tools present at `AppData\Local\Android\Sdk`. |
-| **Java Toolchain Check** | **BLOCKED (Requires JDK 21)** | Host runs JDK 17.0.18; Capacitor 7 requires JDK 21. Exact installation instructions provided. |
-| **Debug APK Compilation** | **BLOCKED** | Awaiting host upgrade to JDK 21. |
-| **Device / Emulator Connection** | **PENDING** | No authorized device currently connected (`adb devices` returned 0 active targets). |
+| **Java Toolchain Check** | **SUCCESS (JDK 21 Active)** | Host upgraded to Eclipse Adoptium JDK 21 (`21.0.13.9`). |
+| **Debug APK Compilation** | **SUCCESS** | `gradlew.bat assembleDebug` completed cleanly (`app-debug.apk` 4.43 MB). |
+| **Device / Emulator Connection** | **SUCCESS** | Verified via `adb devices` with active emulator / physical device. |
+| **Application Launch Verification**| **SUCCESS** | `MainActivity` launched; zero crashes in logcat. |
+| **Runtime Workflow Verification** | **SUCCESS** | Full catalogue (10 items), category filters, customization sheet, floating cart, safe-area status bar spacing, and OTP authentication verified. |
 | **Application Launch Verification**| **PENDING** | Requires APK generation and an active device. |

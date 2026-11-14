@@ -11,7 +11,10 @@ export const FloatingCartBar: React.FC = () => {
   return (
     <aside
       aria-label="Cart summary"
-      className="fixed bottom-4 left-4 right-4 z-40 max-w-lg mx-auto animate-in slide-in-from-bottom duration-300"
+      className="fixed left-4 right-4 z-40 max-w-lg mx-auto animate-in slide-in-from-bottom duration-300"
+      style={{
+        bottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0.75rem) + 0.5rem)'
+      }}
     >
       <button
         onClick={() => setIsCartOpen(true)}

@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext.js';
 import { ShopSetting, Announcement, CustomerPresence } from '../types/index.js';
 import { api } from '../services/api.js';
 import { soundManager } from '../utils/sound.js';
+import { getWebSocketUrl } from '../config/apiConfig.js';
 
 interface ToastAlert {
   id: string;
@@ -96,9 +97,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         socketRef.current.close();
       }
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-
+      const wsUrl = getWebSocketUrl();
       const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 
