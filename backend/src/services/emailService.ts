@@ -56,6 +56,13 @@ export class EmailService {
   }
 
   public isEmailConfigured(): boolean {
+    if (!this.isConfigured) {
+      this.initTransporter();
+    }
+
+    if (!this.isConfigured) {
+      this.initTransporter();
+    }
     return this.isConfigured;
   }
 
@@ -78,6 +85,10 @@ export class EmailService {
       text: `Your RoomBites verification code is: ${code}. Valid for 10 minutes.`,
       code,
     };
+
+    if (!this.isConfigured) {
+      this.initTransporter();
+    }
 
     if (!this.isConfigured) {
       if (isProduction) {
