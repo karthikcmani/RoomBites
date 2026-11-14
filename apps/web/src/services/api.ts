@@ -13,8 +13,7 @@ import {
   OrderStatus,
   StockStatus
 } from '../types/index.js';
-
-const API_BASE = '/api/v1';
+import { getApiBaseUrl, getServerBaseUrl } from '../config/apiConfig.js';
 
 class ApiClient {
   private token: string | null = null;
@@ -48,10 +47,33 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers
-    });
+    const apiBase = getApiBaseUrl();
+    const fullUrl = `${apiBase}${endpoint}`;
+
+    let response: Response;
+    try {
+      response = await fetch(fullUrl, {
+        ...options,
+        headers
+      });
+    } catch (networkErr: any) {
+      const server = getServerBaseUrl() || (typeof window !== 'undefined' ? window.location.origin : '');
+      throw new Error(
+        `Unable to reach RoomBites backend at '${server}'. Ensure the backend is running and your device is connected to the same network.`
+      );
+    }
+
+    // Inspect Content-Type before attempting JSON parsing
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`Server returned error (${response.status}): ${text.slice(0, 150)}`);
+      }
+      throw new Error(
+        `Backend at '${apiBase}' returned non-JSON response (${contentType || 'unknown'}). Please verify that the server URL points to the RoomBites API and not a static web server.`
+      );
+    }
 
     const data = await response.json();
 

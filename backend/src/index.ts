@@ -30,7 +30,29 @@ const CLIENT_URL = process.env.CLIENT_URL || '*';
 
 // Middleware
 app.use(cors({
-  origin: CLIENT_URL === '*' ? '*' : [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow non-browser requests or wildcard
+    if (!origin || CLIENT_URL === '*') return callback(null, true);
+
+    const allowed = [
+      CLIENT_URL,
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'https://localhost',
+      'capacitor://localhost',
+      'http://localhost'
+    ];
+
+    if (
+      allowed.includes(origin) ||
+      origin.startsWith('http://192.168.') ||
+      origin.startsWith('http://172.') ||
+      origin.startsWith('http://10.')
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS_BLOCKED: Origin '${origin}' not allowed by RoomBites CORS policy.`));
+  },
   credentials: true
 }));
 app.use(express.json());

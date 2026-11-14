@@ -30,7 +30,12 @@ const AppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
       {/* Toast Alert Banners */}
-      <div className="fixed top-16 right-4 z-50 space-y-2 pointer-events-none max-w-sm w-full">
+      <div
+        className="fixed right-4 z-50 space-y-2 pointer-events-none max-w-sm w-full"
+        style={{
+          top: 'calc(max(env(safe-area-inset-top, 0px), var(--app-safe-top, 0px)) + 4.25rem)'
+        }}
+      >
         {activeAlerts.map(alert => (
           <div
             key={alert.id}
