@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { getDb } from '../db/index.js';
-import { isValidRitEmail, signToken, AuthUser } from '../middleware/auth.js';
+import { isValidRitEmail, signToken, AuthUser, getOtpPepper } from '../middleware/auth.js';
 import { User, CustomerProfile } from '../types/index.js';
 import { EmailService } from './emailService.js';
 
@@ -8,8 +8,32 @@ export class AuthService {
   private db = getDb();
   private emailService = EmailService.getInstance();
 
-  private hashCode(code: string): string {
-    return crypto.createHash('sha256').update(`rb_otp_salt_${code.trim()}`).digest('hex');
+  /**
+   * Cryptographically secure 6-digit numeric OTP generator using Node.js CSPRNG.
+   * crypto.randomInt(100000, 1000000) produces uniform integers in [100000, 999999],
+   * eliminating modulo bias and guaranteeing a 6-digit string without leading zero truncation.
+   */
+  public generateSecureOtp(): string {
+    return crypto.randomInt(100000, 1000000).toString();
+  }
+
+  /**
+   * Computes an HMAC-SHA256 digest keyed with the server-side pepper and contextually
+   * bound to the user's normalized institutional email.
+   *
+   * Security Benefits:
+   * 1. Secret Key Separation: The pepper is stored strictly in server memory/environment,
+   *    never in the database. A database dump or SQL injection leak cannot brute-force
+   *    the 6-digit OTP offline without the server-side secret key.
+   * 2. Contextual Binding: The hash is cryptographically bound to the recipient's email,
+   *    preventing cross-account hash transposition.
+   */
+  public hashOtp(email: string, code: string): string {
+    const pepper = getOtpPepper();
+    return crypto
+      .createHmac('sha256', pepper)
+      .update(`${email.trim().toLowerCase()}:${code.trim()}`)
+      .digest('hex');
   }
 
   private maskEmail(email: string): string {
@@ -50,12 +74,12 @@ export class AuthService {
       }
     }
 
-    // 3. Generate 6-digit cryptographic numeric OTP
-    const code = crypto.randomInt(100000, 1000000).toString();
-    const codeHash = this.hashCode(code);
+    // 3. Generate 6-digit cryptographic numeric OTP using CSPRNG
+    const code = this.generateSecureOtp();
+    const codeHash = this.hashOtp(cleanEmail, code);
     const expiresAt = new Date(now + 10 * 60 * 1000).toISOString(); // 10 minutes
 
-    // 4. Update / Insert Rate-Limited OTP Record with SHA-256 Hash
+    // 4. Update / Insert Rate-Limited OTP Record with HMAC-SHA256 Hash
     const nowIso = new Date(now).toISOString();
 
     if (existing) {
@@ -113,14 +137,21 @@ export class AuthService {
       throw new Error('TOO_MANY_ATTEMPTS: Maximum verification attempts exceeded. Please request a new code.');
     }
 
-    // Constant-time hash verification against timing attacks
-    const inputHash = this.hashCode(code);
-    const storedHash = otpRecord.code_hash || (otpRecord.code ? this.hashCode(otpRecord.code) : '');
+    // Constant-time hash verification against timing attacks using HMAC-SHA256
+    const inputHash = this.hashOtp(cleanEmail, code);
+    const storedHash = otpRecord.code_hash || '';
 
     const inputBuffer = Buffer.from(inputHash, 'utf8');
     const storedBuffer = Buffer.from(storedHash, 'utf8');
 
-    const isValid = inputBuffer.length === storedBuffer.length && crypto.timingSafeEqual(inputBuffer, storedBuffer);
+    let isValid = false;
+    if (inputBuffer.length === storedBuffer.length) {
+      isValid = crypto.timingSafeEqual(inputBuffer, storedBuffer);
+    } else {
+      // Constant-time dummy comparison to prevent timing leakage on length mismatch
+      crypto.timingSafeEqual(inputBuffer, inputBuffer);
+      isValid = false;
+    }
 
     if (!isValid) {
       const newAttempts = otpRecord.attempts + 1;
