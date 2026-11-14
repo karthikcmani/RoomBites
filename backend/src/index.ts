@@ -9,8 +9,19 @@ import paymentRoutes from './routes/paymentRoutes.js';
 import shopRoutes from './routes/shopRoutes.js';
 import { WebSocketBroker } from './websocket/server.js';
 import { runSeed } from './db/seed.js';
+import { getJwtSecret } from './middleware/auth.js';
 
 dotenv.config();
+
+// Production Security Validation: Fail fast on startup if secrets are insecure
+try {
+  getJwtSecret();
+} catch (err: any) {
+  console.error('[RoomBites Security Error]', err.message);
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 4000;

@@ -5,13 +5,13 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 const authService = new AuthService();
 
-router.post('/request-otp', (req: Request, res: Response) => {
+router.post('/request-otp', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ success: false, error: 'Email address is required.' });
     }
-    const result = authService.requestOtp(email);
+    const result = await authService.requestOtp(email);
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });

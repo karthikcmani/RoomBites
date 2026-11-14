@@ -1,6 +1,6 @@
 # RoomBites — Security & Privacy Guidelines
 
-- **Version:** 1.0.0
+- **Version:** 1.1.0
 - **Status:** Approved
 - **Document ID:** DOC-SEC-005
 
@@ -8,7 +8,7 @@
 
 ## 1. Threat Modeling & Security Principles
 
-RoomBites manages personal contact information (hostel room numbers, phone numbers) and financial records (cash balances, UPI references). We adhere to strict zero-trust principles:
+RoomBites manages student personal contact information (hostel room numbers, phone numbers) and financial records (cash balances, UPI references). We adhere to strict zero-trust principles:
 
 1. **Defense in Depth:** Client validation is mirrored and strictly re-enforced by server-side schemas.
 2. **Principle of Least Privilege:** Ordinary students cannot view peers' presence, phone numbers, or order histories.
@@ -24,37 +24,54 @@ RoomBites manages personal contact information (hostel room numbers, phone numbe
 - Regular expression verification: `/^[a-zA-Z0-9._%+-]+@rit\.ac\.in$/i`.
 - Attempts to register with personal Gmail, Yahoo, or Outlook addresses are rejected at the edge with `400 Bad Request`.
 
-### 2.2 Role-Based Access Control (RBAC)
+### 2.2 Role-Based Access Control (RBAC) & Anti-Tampering
 - **Roles:** `CUSTOMER`, `ADMIN`.
 - Protected routes inspect `req.user.role`.
 - Any non-admin attempting access to `/api/v1/admin/*` receives immediate `403 Forbidden` response and an audit log event.
-- Admin initial assignment is controlled exclusively by server environment variables or master seed tokens.
+- **Role Tampering Prevention:** Profile update endpoints (`POST /api/v1/auth/profile`) accept and sanitize only `{ fullName, roomNumber, phoneNumber }`. Any client-injected fields such as `role`, `isAdmin`, `creditStatus`, or `unpaidOrdersCount` are strictly discarded. Ordinary users cannot promote themselves under any circumstance.
+- **Admin Provisioning:** The administrator account is bound strictly to `ADMIN_EMAIL` configured via server environment variables. Admin sessions cannot be self-claimed.
 
-### 2.3 Passwordless OTP Security
-- Cryptographic OTP: 6 random numeric digits generated via `crypto.randomInt(100000, 999999)`.
-- OTP Lifetime: 10 minutes (600 seconds).
-- Rate Limiting: Maximum 3 OTP requests per email per 15 minutes; maximum 5 verification attempts per OTP before invalidation.
-- OTP storage: Stored in memory / database with hashing and expiry timestamp.
+### 2.3 Passwordless OTP Security & Abuse Prevention
+- **Cryptographic Generation:** 6 random numeric digits generated via `crypto.randomInt(100000, 1000000)`.
+- **Database Hashing:** Plaintext OTPs are never stored. The database stores a SHA-256 digest (`code_hash`) generated with a secret salt.
+- **Timing Attack Resistance:** Verification uses `crypto.timingSafeEqual` over the hash buffers to prevent timing side-channel attacks.
+- **Rate Limiting & Cooldown:**
+  - 60-second mandatory cooldown between consecutive OTP requests for the same address.
+  - Maximum 5 OTP requests per email in any 15-minute rolling window.
+- **Brute-Force Protection:**
+  - Maximum 5 failed verification attempts allowed per OTP.
+  - On the 5th failed attempt, the OTP record is permanently deleted and blocked.
+- **Zero-Exposure Policy:**
+  - OTP codes are **never** returned in any API responses.
+  - Plaintext OTP codes are **never** written to production application logs. Console logs display only masked addresses (e.g. `s***t@rit.ac.in`).
+
+### 2.4 Cryptographic Session Token Handling
+- Signed using HMAC-SHA256 (`HS256`).
+- **Production Fail-Fast Guard:** In `NODE_ENV === 'production'`, the server verifies `JWT_SECRET` at boot. If `JWT_SECRET` is unset, shorter than 32 characters, or matches the default development fallback, the server terminates immediately with a fatal security error (`process.exit(1)`).
 
 ---
 
 ## 3. Financial & Ledger Integrity
 
 1. **Integer Arithmetic Enforcement:**
-   - Currency is stored and calculated in integer Indian Paise (\(1\text{ Rupee} = 100\text{ Paise}\)).
-   - Division is executed strictly for display formatting, preventing binary floating-point roundoff errors.
+   - Currency is stored and calculated strictly in integer Indian Paise (\(1\text{ Rupee} = 100\text{ Paise}\)).
+   - Floating-point numbers are prohibited in database columns and monetary logic.
 2. **The 2-Due Credit Rule Enforcement:**
-   - Server-side check during order checkout transaction:
+   - Enforced transactionally by the backend order creation service:
      ```ts
-     const unpaidOrders = await db.orders.count({
-       where: { customerId, paymentStatus: 'UNPAID', paymentMethod: 'CREDIT' }
-     });
-     if (unpaidOrders > 2) {
-       throw new ForbiddenError('CREDIT_LIMIT_EXCEEDED: Maximum 2 unpaid dues permitted.');
+     if (paymentMethod === 'CREDIT') {
+       if (profile.credit_status !== 'APPROVED') {
+         throw new ForbiddenError('CREDIT_NOT_APPROVED');
+       }
+       if (profile.unpaid_orders_count > 2) {
+         throw new ForbiddenError('CREDIT_LIMIT_EXCEEDED');
+       }
      }
      ```
-3. **Payment Verification:**
-   - Customer UPI references or cash orders are marked `PENDING` until explicit admin verification. Client-side claims are never auto-credited.
+3. **Decoupled Payment Verification:**
+   - Cash and UPI orders are created with `payment_status = 'PENDING'`.
+   - Client-side UPI app links (`upi://pay?pa=...`) only launch external wallet applications; they have zero authority to alter database state.
+   - Payments transition to `VERIFIED` only via explicit admin verification (`POST /api/v1/payments/admin/verify`).
 
 ---
 
@@ -64,18 +81,10 @@ RoomBites manages personal contact information (hostel room numbers, phone numbe
    - Presence tracking broadcasts are sent exclusively to WebSocket clients with `role === 'ADMIN'`.
    - Customers never receive peer presence payloads.
 2. **PII Shielding:**
-   - Phone numbers and room numbers are shared only with the seller for delivery execution.
-   - Database queries exclude phone numbers from public catalog and review queries.
+   - Student contact numbers and hostel room numbers are accessible only to the seller for delivery execution.
 
 ---
 
 ## 5. Environment & Secret Management
-- `.env` is added to `.gitignore`.
-- `.env.example` provides template variables with dummy values:
-  ```env
-  PORT=4000
-  NODE_ENV=development
-  JWT_SECRET=replace_with_64_character_random_hex_key
-  ADMIN_EMAIL=admin@rit.ac.in
-  DATABASE_URL=postgres://user:pass@localhost:5432/roombites
-  ```
+- `.env` is ignored by Git; `.env.example` provides the approved configuration template.
+- Real SMTP credentials (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`) must be provided via server environment variables.

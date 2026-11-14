@@ -231,8 +231,10 @@ export class DatabaseManager {
 
       CREATE TABLE IF NOT EXISTS otps (
         email TEXT PRIMARY KEY,
-        code TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
         attempts INTEGER NOT NULL DEFAULT 0,
+        last_requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        request_count INTEGER NOT NULL DEFAULT 1,
         expires_at TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -245,6 +247,17 @@ export class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_credit_ledger_cust ON credit_ledger(customer_id);
       CREATE INDEX IF NOT EXISTS idx_products_cat ON products(category_id);
     `);
+
+    // Schema migrations for existing databases
+    try {
+      this.db.exec("ALTER TABLE otps ADD COLUMN code_hash TEXT;");
+    } catch {}
+    try {
+      this.db.exec("ALTER TABLE otps ADD COLUMN last_requested_at TEXT;");
+    } catch {}
+    try {
+      this.db.exec("ALTER TABLE otps ADD COLUMN request_count INTEGER DEFAULT 1;");
+    } catch {}
   }
 
   public getRawDb(): DatabaseSync {

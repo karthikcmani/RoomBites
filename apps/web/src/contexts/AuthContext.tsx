@@ -7,7 +7,7 @@ interface AuthContextType {
   profile: CustomerProfile | null;
   token: string | null;
   isLoading: boolean;
-  requestOtp: (email: string) => Promise<{ success: boolean; previewCode?: string }>;
+  requestOtp: (email: string) => Promise<{ success: boolean }>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   updateProfile: (data: { fullName: string; roomNumber: string; phoneNumber: string }) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const requestOtp = async (email: string) => {
     const res = await api.auth.requestOtp(email);
-    return { success: res.success, previewCode: res.previewCode };
+    return { success: res.success };
   };
 
   const verifyOtp = async (email: string, code: string) => {

@@ -29,6 +29,14 @@ CLIENT_URL=https://roombites.rit.ac.in
 JWT_SECRET=generate_with_openssl_rand_hex_32
 ADMIN_SECRET_KEY=roombites_admin_master_setup_key
 
+# Transactional Email Provider (SMTP) - Mandatory in Production
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=auth@rit.ac.in
+SMTP_PASS=your_email_provider_app_password
+SMTP_FROM="RoomBites RIT" <noreply@rit.ac.in>
+
 # Database Connection (PostgreSQL / Supabase)
 DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
 

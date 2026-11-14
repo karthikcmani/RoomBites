@@ -2,73 +2,138 @@ import crypto from 'node:crypto';
 import { getDb } from '../db/index.js';
 import { isValidRitEmail, signToken, AuthUser } from '../middleware/auth.js';
 import { User, CustomerProfile } from '../types/index.js';
+import { EmailService } from './emailService.js';
 
 export class AuthService {
   private db = getDb();
+  private emailService = EmailService.getInstance();
 
-  public requestOtp(email: string): { success: boolean; message: string; previewCode?: string } {
+  private hashCode(code: string): string {
+    return crypto.createHash('sha256').update(`rb_otp_salt_${code.trim()}`).digest('hex');
+  }
+
+  private maskEmail(email: string): string {
+    const [user, domain] = email.split('@');
+    if (!user || !domain) return '***@***';
+    const visible = user.length > 2 ? `${user[0]}***${user[user.length - 1]}` : `${user[0]}***`;
+    return `${visible}@${domain}`;
+  }
+
+  public async requestOtp(email: string): Promise<{ success: boolean; message: string }> {
     const cleanEmail = email.trim().toLowerCase();
 
-    // Check institutional email requirement
+    // 1. Institutional email verification
     if (!isValidRitEmail(cleanEmail)) {
       throw new Error('INVALID_DOMAIN: Only @rit.ac.in institutional email addresses are allowed.');
     }
 
-    // Generate 6-digit numeric OTP
-    const code = crypto.randomInt(100000, 999999).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+    // 2. Request Rate Limiting & Cooldown Checks
+    const existing = this.db.prepare('SELECT * FROM otps WHERE email = ?').get(cleanEmail) as any;
+    const now = Date.now();
 
-    this.db.prepare(`
-      INSERT INTO otps (email, code, attempts, expires_at)
-      VALUES (?, ?, 0, ?)
-      ON CONFLICT(email) DO UPDATE SET
-        code = excluded.code,
-        attempts = 0,
-        expires_at = excluded.expires_at,
-        created_at = CURRENT_TIMESTAMP
-    `).run(cleanEmail, code, expiresAt);
+    if (existing) {
+      const lastRequested = new Date(existing.last_requested_at || existing.created_at).getTime();
+      const diffSeconds = (now - lastRequested) / 1000;
 
-    // In a real production deployment, this emails the user.
-    // For local dev/testing, we return the previewCode if not in strict production mode.
-    const isDev = process.env.NODE_ENV !== 'production';
-    console.log(`[OTP] Dispatching OTP for ${cleanEmail}: ${code}`);
+      // Rule: 60-second cooldown between consecutive requests
+      if (diffSeconds < 60) {
+        const remaining = Math.ceil(60 - diffSeconds);
+        throw new Error(`RATE_LIMITED: Please wait ${remaining} seconds before requesting a new verification code.`);
+      }
 
+      // Rule: Maximum 5 requests in a 15-minute rolling window
+      const windowStart = new Date(existing.created_at).getTime();
+      const windowDiffMinutes = (now - windowStart) / (1000 * 60);
+
+      if (windowDiffMinutes < 15 && existing.request_count >= 5) {
+        throw new Error('RATE_LIMITED_EXCEEDED: Maximum OTP request limit reached. Please wait 15 minutes before requesting again.');
+      }
+    }
+
+    // 3. Generate 6-digit cryptographic numeric OTP
+    const code = crypto.randomInt(100000, 1000000).toString();
+    const codeHash = this.hashCode(code);
+    const expiresAt = new Date(now + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+    // 4. Update / Insert Rate-Limited OTP Record with SHA-256 Hash
+    const nowIso = new Date(now).toISOString();
+
+    if (existing) {
+      const windowStart = new Date(existing.created_at).getTime();
+      const isWindowExpired = (now - windowStart) > (15 * 60 * 1000);
+      const newCount = isWindowExpired ? 1 : (existing.request_count || 1) + 1;
+      const newCreatedAt = isWindowExpired ? nowIso : existing.created_at;
+
+      this.db.prepare(`
+        UPDATE otps
+        SET code_hash = ?, attempts = 0, last_requested_at = ?,
+            request_count = ?, expires_at = ?, created_at = ?
+        WHERE email = ?
+      `).run(codeHash, nowIso, newCount, expiresAt, newCreatedAt, cleanEmail);
+    } else {
+      this.db.prepare(`
+        INSERT INTO otps (email, code_hash, attempts, last_requested_at, request_count, expires_at, created_at)
+        VALUES (?, ?, 0, ?, 1, ?, ?)
+      `).run(cleanEmail, codeHash, nowIso, expiresAt, nowIso);
+    }
+
+    // 5. Send Real Email via Transactional Email Provider
+    // Note: NEVER log plaintext OTP to console in production
+    if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      console.log(`[Auth] OTP dispatched to ${this.maskEmail(cleanEmail)}`);
+    }
+
+    await this.emailService.sendOtpEmail(cleanEmail, code);
+
+    // 6. Return uniform response without leaking OTP code or user status
     return {
       success: true,
-      message: 'Verification code sent to your RIT email address.',
-      previewCode: isDev ? code : undefined
+      message: 'If this is a valid institutional address, a verification code has been dispatched to your institutional inbox.'
     };
   }
 
   public verifyOtp(email: string, code: string): { token: string; user: User & { profile?: CustomerProfile } } {
     const cleanEmail = email.trim().toLowerCase();
 
-    const otpRecord = this.db.prepare('SELECT * FROM otps WHERE email = ?').get(cleanEmail) as {
-      code: string;
-      attempts: number;
-      expires_at: string;
-    } | undefined;
+    const otpRecord = this.db.prepare('SELECT * FROM otps WHERE email = ?').get(cleanEmail) as any;
 
     if (!otpRecord) {
       throw new Error('OTP_NOT_FOUND: Please request a new verification code.');
     }
 
+    // Check expiration (10 minutes)
     if (new Date() > new Date(otpRecord.expires_at)) {
       this.db.prepare('DELETE FROM otps WHERE email = ?').run(cleanEmail);
       throw new Error('OTP_EXPIRED: The verification code has expired. Please request a new one.');
     }
 
+    // Check attempt limits (max 5)
     if (otpRecord.attempts >= 5) {
       this.db.prepare('DELETE FROM otps WHERE email = ?').run(cleanEmail);
-      throw new Error('TOO_MANY_ATTEMPTS: Too many incorrect attempts. Please request a new code.');
+      throw new Error('TOO_MANY_ATTEMPTS: Maximum verification attempts exceeded. Please request a new code.');
     }
 
-    if (otpRecord.code !== code.trim()) {
-      this.db.prepare('UPDATE otps SET attempts = attempts + 1 WHERE email = ?').run(cleanEmail);
+    // Constant-time hash verification against timing attacks
+    const inputHash = this.hashCode(code);
+    const storedHash = otpRecord.code_hash || (otpRecord.code ? this.hashCode(otpRecord.code) : '');
+
+    const inputBuffer = Buffer.from(inputHash, 'utf8');
+    const storedBuffer = Buffer.from(storedHash, 'utf8');
+
+    const isValid = inputBuffer.length === storedBuffer.length && crypto.timingSafeEqual(inputBuffer, storedBuffer);
+
+    if (!isValid) {
+      const newAttempts = otpRecord.attempts + 1;
+      if (newAttempts >= 5) {
+        this.db.prepare('DELETE FROM otps WHERE email = ?').run(cleanEmail);
+        throw new Error('TOO_MANY_ATTEMPTS: Maximum verification attempts exceeded. Please request a new code.');
+      } else {
+        this.db.prepare('UPDATE otps SET attempts = ? WHERE email = ?').run(newAttempts, cleanEmail);
+      }
       throw new Error('INVALID_OTP: The entered verification code is incorrect.');
     }
 
-    // Validated: delete OTP
+    // Successfully verified: immediately delete OTP
     this.db.prepare('DELETE FROM otps WHERE email = ?').run(cleanEmail);
 
     // Fetch or create User
@@ -125,6 +190,16 @@ export class AuthService {
   }
 
   public updateProfile(userId: string, data: { fullName: string; roomNumber: string; phoneNumber: string }): CustomerProfile {
+    // Security check: Only sanitize and accept fullName, roomNumber, phoneNumber.
+    // Ignored: any 'role', 'creditStatus', 'unpaidOrdersCount', 'isAdmin' injected by malicious clients.
+    const fullName = String(data.fullName || '').trim();
+    const roomNumber = String(data.roomNumber || '').trim();
+    const phoneNumber = String(data.phoneNumber || '').trim();
+
+    if (!fullName || !roomNumber || !phoneNumber) {
+      throw new Error('INVALID_INPUT: Full name, room number, and phone number are required.');
+    }
+
     const existing = this.db.prepare('SELECT * FROM customer_profiles WHERE user_id = ?').get(userId) as any;
 
     if (existing) {
@@ -132,12 +207,12 @@ export class AuthService {
         UPDATE customer_profiles
         SET full_name = ?, room_number = ?, phone_number = ?, updated_at = CURRENT_TIMESTAMP
         WHERE user_id = ?
-      `).run(data.fullName.trim(), data.roomNumber.trim(), data.phoneNumber.trim(), userId);
+      `).run(fullName, roomNumber, phoneNumber, userId);
     } else {
       this.db.prepare(`
         INSERT INTO customer_profiles (user_id, full_name, room_number, phone_number)
         VALUES (?, ?, ?, ?)
-      `).run(userId, data.fullName.trim(), data.roomNumber.trim(), data.phoneNumber.trim());
+      `).run(userId, fullName, roomNumber, phoneNumber);
     }
 
     const updated = this.db.prepare('SELECT * FROM customer_profiles WHERE user_id = ?').get(userId) as any;

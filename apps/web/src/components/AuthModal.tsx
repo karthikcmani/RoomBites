@@ -17,7 +17,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [previewOtp, setPreviewOtp] = useState<string | null>(null);
 
   // Profile form
   const [fullName, setFullName] = useState(profile?.fullName || '');
@@ -39,8 +38,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
     setIsLoading(true);
     try {
-      const res = await requestOtp(email.trim());
-      if (res.previewCode) setPreviewOtp(res.previewCode);
+      await requestOtp(email.trim());
       setStep('otp');
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to dispatch verification code.');
@@ -174,14 +172,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           {!user && step === 'otp' && (
             <form onSubmit={handleVerifyOtp} className="space-y-3">
               <p className="text-xs text-slate-400">
-                Enter the 6-digit code sent to <strong className="text-slate-200">{email}</strong>.
+                Enter the 6-digit code sent to your institutional email: <strong className="text-slate-200">{email}</strong>.
               </p>
-
-              {previewOtp && (
-                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] text-center font-mono">
-                  Dev OTP: <strong>{previewOtp}</strong>
-                </div>
-              )}
 
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
