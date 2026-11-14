@@ -99,8 +99,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         {/* Body */}
         <div className="p-5 space-y-4">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
-              {errorMsg}
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex flex-col gap-1.5">
+              <span>{errorMsg}</span>
+              {errorMsg.includes('RATE_LIMITED') && (
+                <button
+                  type="button"
+                  onClick={() => { setErrorMsg(null); setStep('otp'); }}
+                  className="text-amber-400 hover:text-amber-300 text-left font-semibold underline mt-1"
+                >
+                  Code already requested? Click here to enter your 6-digit OTP →
+                </button>
+              )}
             </div>
           )}
 
@@ -165,6 +174,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               >
                 {isLoading ? 'Sending Code...' : 'Continue with RIT Email'}
               </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setStep('otp');
+                  }}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 underline"
+                >
+                  Already have a code? Enter verification code →
+                </button>
+              </div>
             </form>
           )}
 
