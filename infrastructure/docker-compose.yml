@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: roombites_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: roombites
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: roombites_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../infrastructure/Dockerfile.backend
+    container_name: roombites_backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:roombites_secure_password@postgres:5432/roombites
+      JWT_SECRET: roombites_production_jwt_secret_key_minimum_32_characters
+      ADMIN_EMAIL: admin@rit.ac.in
+      CLIENT_URL: "*"
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:

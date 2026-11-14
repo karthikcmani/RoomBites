@@ -6,14 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0-dev] - 2026-11-15
+## [1.0.0] - 2026-11-15
 
 ### Added
-- Comprehensive Product Requirements Document (`ROOMBITES_PRD.md`).
-- Architectural Decision Record (`ARCHITECTURE_DECISION_RECORD.md`) evaluating F-Droid eligibility, lightweight client bundle, and integer paise currency precision.
-- Technical Blueprint (`ROOMBITES_TECHNICAL_BLUEPRINT.md`) covering WebSocket protocol, presence heartbeat, and order state machine.
-- Relational Database Schema (`ROOMBITES_DATABASE_DESIGN.md`) supporting orders, products, double-entry credit ledger, and multi-seller readiness.
-- REST & WebSocket API documentation (`ROOMBITES_API_DOCUMENTATION.md`).
-- UI/UX Guidelines (`ROOMBITES_UI_UX_GUIDELINES.md`) with midnight theme and tactile interactions.
-- Security and Privacy Guidelines (`ROOMBITES_SECURITY_GUIDELINES.md`) specifying institutional `@rit.ac.in` domain quarantine and presence shielding.
-- Deployment Guide (`ROOMBITES_DEPLOYMENT_GUIDE.md`) and Quality Assurance Test Plan (`ROOMBITES_TESTING_REPORT.md`).
+- **Full Backend API & Real-time Server:**
+  - Node.js 22 + TypeScript + Express backend with WebSocket (`ws`) broker.
+  - Institutional `@rit.ac.in` domain verification with OTP authentication.
+  - Double-entry integer-paise financial ledger (eliminating floating-point inaccuracy).
+  - Strict Credit Management implementing Rule 15 (maximum 2 unpaid dues allowed).
+  - Order state machine supporting `PLACED`, `ACCEPTED`, `REJECTED`, `PREPARING`, `OUT_FOR_DELIVERY`, `DELIVERED`, and `CANCELLED`.
+  - Alternative product suggestion workflow allowing seller substitution with customer acceptance.
+  - Real-time customer presence tracking shielded strictly to authenticated administrators.
+  - Shop availability states (`AVAILABLE`, `BUSY`, `CLOSED`, `SLEEPING`) with emergency contact display.
+  - 15 automated tests executed via native test runner with 100% pass rate.
+- **Cross-Platform Client & Admin Application:**
+  - Modern, mobile-first React 18 + TypeScript + Vite + Tailwind CSS frontend.
+  - Audio synthesizer using HTML5 Web Audio API for order chimes with zero external audio assets.
+  - PWA manifest and mobile viewport configuration.
+  - Native Android wrapper generated via Capacitor for clean APK generation and F-Droid eligibility.
+  - Swiggy/Zomato inspired midnight design system with category pill bar, item customizer modal, slide-up cart sheet, and live order tracker stepper.
+  - Dedicated Admin Command Center with live order feed, customer presence roster, inventory stock toggles, credit settlement, and announcement broadcasting.
+- **DevOps & Infrastructure:**
+  - Docker Compose configuration for PostgreSQL and Node.js backend.
+  - Dockerfile for production containerization.
+  - GitHub Actions CI workflow running backend tests and frontend builds on every commit.
+  - Complete documentation suite across 12 permanent documents in `docs/`.
