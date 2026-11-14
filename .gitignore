@@ -9,6 +9,10 @@ coverage/
 *.db
 *.db-journal
 *.db-wal
+*.tsbuildinfo
+.gradle/
+*.apk
+*.aab
 
 .dart_tool/
 .flutter-plugins
