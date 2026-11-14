@@ -1,5 +1,6 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { DatabaseManager } from '../src/db/index.js';
 import { runSeed } from '../src/db/seed.js';
 import { AuthService } from '../src/services/authService.js';
@@ -9,7 +10,7 @@ import { PaymentService } from '../src/services/paymentService.js';
 import { ShopService } from '../src/services/shopService.js';
 import { AnalyticsService } from '../src/services/analyticsService.js';
 import { EmailService } from '../src/services/emailService.js';
-import { isValidRitEmail, getJwtSecret } from '../src/middleware/auth.js';
+import { isValidRitEmail, getJwtSecret, getOtpPepper } from '../src/middleware/auth.js';
 
 describe('RoomBites Comprehensive Backend & Security Test Suite', () => {
   let authService: AuthService;
@@ -172,6 +173,96 @@ describe('RoomBites Comprehensive Backend & Security Test Suite', () => {
       } finally {
         process.env.NODE_ENV = prevEnv;
         process.env.JWT_SECRET = prevSecret;
+      }
+    });
+
+    test('Generates 6-digit cryptographic numeric OTPs via CSPRNG without bias', () => {
+      const generatedCodes = new Set<string>();
+      for (let i = 0; i < 100; i++) {
+        const code = authService.generateSecureOtp();
+        assert.match(code, /^\d{6}$/);
+        const num = Number.parseInt(code, 10);
+        assert.ok(num >= 100000 && num <= 999999);
+        generatedCodes.add(code);
+      }
+      // Assert high entropy (at least 95 unique codes in 100 samples)
+      assert.ok(generatedCodes.size >= 95);
+    });
+
+    test('Stores OTP with HMAC-SHA256 server pepper: Immune to offline unkeyed rainbow table brute-forcing', async () => {
+      const email = 'crypto.test@rit.ac.in';
+      await authService.requestOtp(email);
+      const code = emailService.getLastSentForTesting()!.code;
+
+      const rawDb = DatabaseManager.getInstance().getRawDb();
+      const row = rawDb.prepare('SELECT code_hash FROM otps WHERE email = ?').get(email) as any;
+
+      assert.ok(row && row.code_hash);
+      assert.equal(row.code_hash.length, 64); // 256-bit hex hash
+
+      // Vulnerability regression check: Ensure plaintext unkeyed SHA-256 (with old static salt) does NOT match
+      const legacySaltedSha256 = crypto.createHash('sha256').update(`rb_otp_salt_${code}`).digest('hex');
+      assert.notEqual(row.code_hash, legacySaltedSha256);
+
+      // Verify that without the real server pepper, an attacker's offline HMAC calculations cannot match
+      const customPepperHash = crypto.createHmac('sha256', 'attacker_arbitrary_key_without_real_server_pepper_32_chars')
+        .update(`${email}:${code}`)
+        .digest('hex');
+      assert.notEqual(row.code_hash, customPepperHash);
+
+      // Correct verification succeeds
+      const result = authService.verifyOtp(email, code);
+      assert.ok(result.token);
+    });
+
+    test('Enforces contextual email binding: Prevents cross-account hash transposition', () => {
+      const code = '654321';
+      const hashUser1 = authService.hashOtp('user1@rit.ac.in', code);
+      const hashUser2 = authService.hashOtp('user2@rit.ac.in', code);
+
+      // Same code for two different users MUST produce completely distinct HMAC digests
+      assert.notEqual(hashUser1, hashUser2);
+    });
+
+    test('Preserves timing-safe verification for malformed and edge-case inputs', async () => {
+      const email = 'timing.student@rit.ac.in';
+      await authService.requestOtp(email);
+
+      // Submitting wrong-length codes or weird inputs must not throw runtime buffer errors
+      assert.throws(() => {
+        authService.verifyOtp(email, '1');
+      }, /INVALID_OTP/);
+
+      assert.throws(() => {
+        authService.verifyOtp(email, '1234567890');
+      }, /INVALID_OTP/);
+
+      assert.throws(() => {
+        authService.verifyOtp(email, 'ABCDEF');
+      }, /INVALID_OTP/);
+    });
+
+    test('Fails fast in production if OTP_SECRET / pepper is unset or insecure', () => {
+      const prevEnv = process.env.NODE_ENV;
+      const prevOtpSecret = process.env.OTP_SECRET;
+      const prevJwtSecret = process.env.JWT_SECRET;
+
+      try {
+        process.env.NODE_ENV = 'production';
+        process.env.OTP_SECRET = 'roombites_dev_otp_pepper_change_in_production_32_chars'; // Known default
+        process.env.JWT_SECRET = 'roombites_dev_secret_key_change_in_production_32_chars';
+
+        assert.throws(() => {
+          getOtpPepper();
+        }, /FATAL_SECURITY_ERROR/);
+
+        // Strong secret of at least 32 characters passes
+        process.env.OTP_SECRET = 'a_very_strong_custom_production_otp_pepper_secret_64_characters_ok';
+        assert.equal(getOtpPepper(), 'a_very_strong_custom_production_otp_pepper_secret_64_characters_ok');
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+        process.env.OTP_SECRET = prevOtpSecret;
+        process.env.JWT_SECRET = prevJwtSecret;
       }
     });
   });

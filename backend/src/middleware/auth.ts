@@ -19,6 +19,7 @@ declare global {
 }
 
 const DEFAULT_DEV_SECRET = 'roombites_dev_secret_key_change_in_production_32_chars';
+const DEFAULT_DEV_OTP_PEPPER = 'roombites_dev_otp_pepper_change_in_production_32_chars';
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -31,6 +32,19 @@ export function getJwtSecret(): string {
     return secret;
   }
   return secret || DEFAULT_DEV_SECRET;
+}
+
+export function getOtpPepper(): string {
+  const pepper = process.env.OTP_SECRET || process.env.OTP_PEPPER || process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!pepper || pepper === DEFAULT_DEV_OTP_PEPPER || pepper === DEFAULT_DEV_SECRET || pepper.length < 32) {
+      throw new Error(
+        'FATAL_SECURITY_ERROR: In production, OTP_SECRET (or JWT_SECRET) must be explicitly configured with a strong secret of at least 32 characters.'
+      );
+    }
+    return pepper;
+  }
+  return pepper || DEFAULT_DEV_OTP_PEPPER;
 }
 
 export function signToken(user: AuthUser, expiresIn: SignOptions['expiresIn'] = '7d'): string {

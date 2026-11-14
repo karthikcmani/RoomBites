@@ -25,8 +25,9 @@ PORT=4000
 NODE_ENV=production
 CLIENT_URL=https://roombites.rit.ac.in
 
-# Cryptographic Secrets
+# Cryptographic Secrets (Minimum 32 characters in production)
 JWT_SECRET=generate_with_openssl_rand_hex_32
+OTP_SECRET=generate_with_openssl_rand_hex_32_for_otp_pepper
 ADMIN_SECRET_KEY=roombites_admin_master_setup_key
 
 # Transactional Email Provider (SMTP) - Mandatory in Production

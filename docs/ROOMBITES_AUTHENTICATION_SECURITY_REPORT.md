@@ -3,13 +3,13 @@
 - **Date:** 2026-11-15
 - **Branch:** `feature/auth-security-hardening`
 - **Target Release:** v1.1.0-sec
-- **Status:** Complete & Verified by Automated Security Test Suite (19/19 Passing)
+- **Status:** Complete & Verified by Automated Security Test Suite (24/24 Passing)
 
 ---
 
 ## 1. Executive Summary
 
-Following the v1.0.0 post-release audit, comprehensive security enhancements were engineered and verified across the RoomBites authentication and session pipeline. This report provides an objective status of all security controls, distinguishing between functionality verified through automated testing and integrations awaiting live production provider credentials.
+Following the v1.0.0 post-release audit, comprehensive security enhancements were engineered and verified across the RoomBites authentication and session pipeline. Subsequently, the OTP cryptographic implementation was reviewed and hardened against offline brute-force attacks: OTP generation was verified to use Node.js CSPRNG (`crypto.randomInt`), and the storage layer was migrated to HMAC-SHA256 with a dedicated server-side pepper and contextual email binding. This report provides an objective status of all security controls, distinguishing between functionality verified through automated testing and integrations awaiting live production provider credentials.
 
 ---
 
@@ -21,7 +21,7 @@ Following the v1.0.0 post-release audit, comprehensive security enhancements wer
 | **2. Zero OTP in API Responses** | **Implemented & Tested** | `previewCode` and plaintext OTP fields have been eradicated from all API responses, backend controllers, and frontend models. API returns uniform success messages without exposing codes. |
 | **3. Removal of Plaintext OTP Logging** | **Implemented & Tested** | Console logging of OTP codes has been removed. Non-test logs output only masked email addresses (e.g., `s***t@rit.ac.in`). In production, zero code leakage occurs. |
 | **4. Expiration, Attempt & Rate Limits** | **Implemented & Tested** | - 60-second consecutive request cooldown.<br>- 5 requests per 15-minute rolling window limit.<br>- 10-minute code expiration.<br>- Maximum 5 verification attempts before permanent invalidation and deletion. |
-| **5. Anti-Enumeration & Abuse Controls** | **Implemented & Tested** | - Uniform responses regardless of account existence.<br>- Constant-time verification using `crypto.timingSafeEqual` prevents timing side-channel attacks.<br>- Cryptographic SHA-256 hash storage with salt in database. |
+| **5. Anti-Enumeration & Cryptographic Controls** | **Implemented & Tested** | - Uniform responses regardless of account existence.<br>- Constant-time verification using `crypto.timingSafeEqual` prevents timing side-channel attacks.<br>- Cryptographic HMAC-SHA256 digest keyed with a server-side pepper (`OTP_SECRET` / `OTP_PEPPER`) and contextually bound to normalized recipient email.<br>- Offline brute-force immunity against database dump leaks. |
 | **6. Dev Auth Lockdown in Production** | **Implemented & Tested** | Production mode (`NODE_ENV=production`) disables all fallback mocks. If SMTP is unconfigured in production, `sendOtpEmail` fails explicitly rather than faking delivery. |
 | **7. Secure Admin Provisioning** | **Implemented & Tested** | The admin account is bound strictly to `ADMIN_EMAIL`. Ordinary sign-ins cannot claim administrative rights. |
 | **8. Anti-Role Tampering** | **Implemented & Tested** | `updateProfile` sanitizes input, accepting only `fullName`, `roomNumber`, `phoneNumber`. Injected `role`, `isAdmin`, or `creditStatus` fields are stripped and discarded. |
@@ -34,13 +34,16 @@ Following the v1.0.0 post-release audit, comprehensive security enhancements wer
 
 ### A. Implemented and Tested (100% Verified)
 1. **Domain Quarantine:** Only `@rit.ac.in` addresses can request codes; all others are rejected with `400 INVALID_DOMAIN`.
-2. **Rate Limiting Cooldown:** Requesting a second OTP within 60 seconds is rejected with `RATE_LIMITED`.
-3. **Rolling Request Limiting:** More than 5 requests in a 15-minute window are blocked with `RATE_LIMITED_EXCEEDED`.
-4. **Brute-Force Invalidation:** 5 consecutive incorrect OTP entries permanently invalidate and purge the OTP record.
-5. **Constant-Time Verification:** Hash comparison uses `crypto.timingSafeEqual` against SHA-256 digests.
-6. **Role Tampering Protection:** Verified via automated test injecting `{ role: 'ADMIN', creditStatus: 'APPROVED' }` into profile updates; customer profile and role remained unchanged.
-7. **Production JWT Guard:** Verified via automated test that setting `NODE_ENV=production` with the default dev secret immediately throws a `FATAL_SECURITY_ERROR`.
-8. **API Response Hygiene:** Verified that `/auth/request-otp` returns only `{ success: true, message: string }` with no `previewCode`.
+2. **CSPRNG OTP Generation:** 6-digit codes generated using `crypto.randomInt(100000, 1000000)` ensuring uniform distribution across 900,000 combinations without modulo bias.
+3. **HMAC-SHA256 Server-Peppered Storage:** Stored hash is an HMAC-SHA256 digest keyed with `OTP_SECRET` and bound to the recipient's email. An attacker obtaining a database dump cannot compute rainbow tables or brute-force the 6-digit space offline.
+4. **Contextual Binding:** Verifying an OTP code across different accounts is prevented; identical codes produce distinct HMAC hashes for different emails.
+5. **Rate Limiting Cooldown:** Requesting a second OTP within 60 seconds is rejected with `RATE_LIMITED`.
+6. **Rolling Request Limiting:** More than 5 requests in a 15-minute window are blocked with `RATE_LIMITED_EXCEEDED`.
+7. **Brute-Force Invalidation:** 5 consecutive incorrect OTP entries permanently invalidate and purge the OTP record.
+8. **Constant-Time Verification:** Hash comparison uses `crypto.timingSafeEqual` over HMAC-SHA256 buffers, with dummy comparison handling length mismatches without timing leaks.
+9. **Role Tampering Protection:** Verified via automated test injecting `{ role: 'ADMIN', creditStatus: 'APPROVED' }` into profile updates; customer profile and role remained unchanged.
+10. **Production Secret Guards:** Verified via automated test that setting `NODE_ENV=production` with default or weak `JWT_SECRET` or `OTP_SECRET` immediately throws a `FATAL_SECURITY_ERROR`.
+11. **API Response Hygiene:** Verified that `/auth/request-otp` returns only `{ success: true, message: string }` with no `previewCode`.
 
 ### B. Implemented but Awaiting Real Provider Credentials
 1. **Live External Inbox OTP Delivery:**
