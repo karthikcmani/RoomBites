@@ -18,15 +18,28 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'roombites_dev_secret_key_change_in_production_32_chars';
+const DEFAULT_DEV_SECRET = 'roombites_dev_secret_key_change_in_production_32_chars';
+
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret || secret === DEFAULT_DEV_SECRET || secret.length < 32) {
+      throw new Error(
+        'FATAL_SECURITY_ERROR: In production, JWT_SECRET must be explicitly configured with a strong secret of at least 32 characters.'
+      );
+    }
+    return secret;
+  }
+  return secret || DEFAULT_DEV_SECRET;
+}
 
 export function signToken(user: AuthUser, expiresIn: SignOptions['expiresIn'] = '7d'): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn });
+  return jwt.sign(user, getJwtSecret(), { expiresIn });
 }
 
 export function verifyToken(token: string): AuthUser | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as AuthUser;
+    return jwt.verify(token, getJwtSecret()) as AuthUser;
   } catch {
     return null;
   }

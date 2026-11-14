@@ -1,4 +1,4 @@
-import { test, describe, before, after } from 'node:test';
+import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseManager } from '../src/db/index.js';
 import { runSeed } from '../src/db/seed.js';
@@ -8,17 +8,23 @@ import { OrderService } from '../src/services/orderService.js';
 import { PaymentService } from '../src/services/paymentService.js';
 import { ShopService } from '../src/services/shopService.js';
 import { AnalyticsService } from '../src/services/analyticsService.js';
-import { isValidRitEmail } from '../src/middleware/auth.js';
+import { EmailService } from '../src/services/emailService.js';
+import { isValidRitEmail, getJwtSecret } from '../src/middleware/auth.js';
 
-describe('RoomBites Comprehensive Backend Test Suite', () => {
+describe('RoomBites Comprehensive Backend & Security Test Suite', () => {
   let authService: AuthService;
   let productService: ProductService;
   let orderService: OrderService;
   let paymentService: PaymentService;
   let shopService: ShopService;
   let analyticsService: AnalyticsService;
+  let emailService: EmailService;
 
   before(() => {
+    // Set test environment
+    process.env.NODE_ENV = 'test';
+    process.env.EMAIL_DRIVER = 'memory';
+
     // Initialize in-memory test database
     DatabaseManager.getInstance(':memory:');
     runSeed();
@@ -29,34 +35,44 @@ describe('RoomBites Comprehensive Backend Test Suite', () => {
     paymentService = new PaymentService();
     shopService = new ShopService();
     analyticsService = new AnalyticsService();
+    emailService = EmailService.getInstance();
   });
 
   describe('1. Authentication & Institutional Domain Quarantine', () => {
-    test('Rejects non-@rit.ac.in email addresses', () => {
+    test('Rejects non-@rit.ac.in email addresses', async () => {
       assert.equal(isValidRitEmail('student@gmail.com'), false);
       assert.equal(isValidRitEmail('student@yahoo.co.in'), false);
       assert.equal(isValidRitEmail('hacker@mit.edu'), false);
       assert.equal(isValidRitEmail(''), false);
 
-      assert.throws(() => {
-        authService.requestOtp('student@gmail.com');
+      await assert.rejects(async () => {
+        await authService.requestOtp('student@gmail.com');
       }, /INVALID_DOMAIN/);
     });
 
-    test('Accepts valid @rit.ac.in institutional email and delivers OTP', () => {
+    test('Accepts valid @rit.ac.in email, delivers real email, and omits code from API response', async () => {
       const email = 'karthik@rit.ac.in';
       assert.equal(isValidRitEmail(email), true);
 
-      const res = authService.requestOtp(email);
+      const res = await authService.requestOtp(email);
       assert.equal(res.success, true);
-      assert.ok(res.previewCode);
-      assert.equal(res.previewCode.length, 6);
+      // Security rule: code must NEVER be returned in API response
+      assert.equal((res as any).previewCode, undefined);
+      assert.equal((res as any).code, undefined);
+
+      // Verify email was actually dispatched via EmailService
+      const lastSent = emailService.getLastSentForTesting();
+      assert.ok(lastSent);
+      assert.equal(lastSent.to, email);
+      assert.equal(lastSent.code.length, 6);
     });
 
-    test('Verifies OTP, generates valid JWT session, and supports profile creation', () => {
+    test('Verifies OTP, generates valid JWT session, and supports profile creation', async () => {
       const email = 'arjun@rit.ac.in';
-      const otpRes = authService.requestOtp(email);
-      const authRes = authService.verifyOtp(email, otpRes.previewCode!);
+      await authService.requestOtp(email);
+      const code = emailService.getLastSentForTesting()!.code;
+
+      const authRes = authService.verifyOtp(email, code);
 
       assert.ok(authRes.token);
       assert.equal(authRes.user.email, email);
@@ -77,7 +93,90 @@ describe('RoomBites Comprehensive Backend Test Suite', () => {
     });
   });
 
-  describe('2. Product Catalog & Menu Integrity', () => {
+  describe('2. Authentication Security Controls & Abuse Prevention', () => {
+    test('Enforces 60-second cooldown on consecutive OTP requests for the same address', async () => {
+      const email = 'cooldown.student@rit.ac.in';
+      await authService.requestOtp(email);
+
+      // Immediate second request must trigger rate limit cooldown
+      await assert.rejects(async () => {
+        await authService.requestOtp(email);
+      }, /RATE_LIMITED/);
+    });
+
+    test('Enforces maximum 5 verification attempts before permanent invalidation', async () => {
+      const email = 'bruteforce.target@rit.ac.in';
+      await authService.requestOtp(email);
+
+      // 4 wrong attempts
+      for (let i = 1; i <= 4; i++) {
+        assert.throws(() => {
+          authService.verifyOtp(email, '000000');
+        }, /INVALID_OTP/);
+      }
+
+      // 5th wrong attempt must trigger maximum attempts exceeded and invalidate OTP
+      assert.throws(() => {
+        authService.verifyOtp(email, '000000');
+      }, /TOO_MANY_ATTEMPTS/);
+
+      // Subsequent attempt must find no OTP
+      assert.throws(() => {
+        authService.verifyOtp(email, '000000');
+      }, /OTP_NOT_FOUND/);
+    });
+
+    test('Prevents role tampering and privilege elevation through profile updates', async () => {
+      const email = 'attacker@rit.ac.in';
+      await authService.requestOtp(email);
+      const code = emailService.getLastSentForTesting()!.code;
+      const { user } = authService.verifyOtp(email, code);
+
+      assert.equal(user.role, 'CUSTOMER');
+
+      // Malicious attempt to inject 'role: ADMIN' or 'creditStatus: APPROVED'
+      const maliciousPayload: any = {
+        fullName: 'Legitimate Name',
+        roomNumber: 'Room 999',
+        phoneNumber: '+919999999999',
+        role: 'ADMIN',
+        creditStatus: 'APPROVED',
+        isAdmin: true
+      };
+
+      authService.updateProfile(user.id, maliciousPayload);
+
+      // Verify user's actual profile in DB remains untampered
+      const verifiedProfile = authService.getProfile(user.id)!;
+      assert.equal(verifiedProfile.creditStatus, 'DISABLED');
+
+      const dbUser = DatabaseManager.getInstance().getRawDb().prepare('SELECT role FROM users WHERE id = ?').get(user.id) as any;
+      assert.equal(dbUser.role, 'CUSTOMER');
+    });
+
+    test('Fails fast in production if JWT_SECRET is unset or using default dev secret', () => {
+      const prevEnv = process.env.NODE_ENV;
+      const prevSecret = process.env.JWT_SECRET;
+
+      try {
+        process.env.NODE_ENV = 'production';
+        process.env.JWT_SECRET = 'roombites_dev_secret_key_change_in_production_32_chars'; // Known default
+
+        assert.throws(() => {
+          getJwtSecret();
+        }, /FATAL_SECURITY_ERROR/);
+
+        // Strong secret of at least 32 characters should pass
+        process.env.JWT_SECRET = 'a_very_strong_custom_production_secret_key_64_characters_minimum_length_ok';
+        assert.equal(getJwtSecret(), 'a_very_strong_custom_production_secret_key_64_characters_minimum_length_ok');
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+        process.env.JWT_SECRET = prevSecret;
+      }
+    });
+  });
+
+  describe('3. Product Catalog & Menu Integrity', () => {
     test('Seeds initial categories and products correctly', () => {
       const categories = productService.getCategories();
       assert.ok(categories.length >= 6);
@@ -110,12 +209,13 @@ describe('RoomBites Comprehensive Backend Test Suite', () => {
     });
   });
 
-  describe('3. Order Lifecycle, Cash & UPI Payments', () => {
+  describe('4. Order Lifecycle, Cash & UPI Payments', () => {
     let customerUser: any;
 
-    before(() => {
+    before(async () => {
       const email = 'rohit@rit.ac.in';
-      const otp = authService.requestOtp(email).previewCode!;
+      await authService.requestOtp(email);
+      const otp = emailService.getLastSentForTesting()!.code;
       customerUser = authService.verifyOtp(email, otp).user;
       authService.updateProfile(customerUser.id, {
         fullName: 'Rohit Sharma',
@@ -214,10 +314,11 @@ describe('RoomBites Comprehensive Backend Test Suite', () => {
     });
   });
 
-  describe('4. Alternative Product Suggestion Workflow', () => {
-    test('Admin suggests substitute product and customer accepts with updated price', () => {
+  describe('5. Alternative Product Suggestion Workflow', () => {
+    test('Admin suggests substitute product and customer accepts with updated price', async () => {
       const email = 'neeraj@rit.ac.in';
-      const otp = authService.requestOtp(email).previewCode!;
+      await authService.requestOtp(email);
+      const otp = emailService.getLastSentForTesting()!.code;
       const user = authService.verifyOtp(email, otp).user;
       authService.updateProfile(user.id, {
         fullName: 'Neeraj Madhav',
@@ -251,12 +352,13 @@ describe('RoomBites Comprehensive Backend Test Suite', () => {
     });
   });
 
-  describe('5. Strict Credit Ledger & The 2-Due Rule', () => {
+  describe('6. Strict Credit Ledger & The 2-Due Rule', () => {
     let creditUser: any;
 
-    before(() => {
+    before(async () => {
       const email = 'credit.student@rit.ac.in';
-      const otp = authService.requestOtp(email).previewCode!;
+      await authService.requestOtp(email);
+      const otp = emailService.getLastSentForTesting()!.code;
       creditUser = authService.verifyOtp(email, otp).user;
       authService.updateProfile(creditUser.id, {
         fullName: 'Kiran Credit User',
@@ -347,8 +449,8 @@ describe('RoomBites Comprehensive Backend Test Suite', () => {
     });
   });
 
-  describe('6. Shop Availability & Analytics', () => {
-    test('Admin switches shop to SLEEPING and instant orders are blocked', () => {
+  describe('7. Shop Availability & Analytics', () => {
+    test('Admin switches shop to SLEEPING and instant orders are blocked', async () => {
       shopService.updateSettings({
         status: 'SLEEPING',
         statusNote: 'Sleeping between 5:30 AM and 8:30 PM. Call for medical emergency only.',
@@ -361,7 +463,8 @@ describe('RoomBites Comprehensive Backend Test Suite', () => {
 
       // Attempting to place an instant order while shop is SLEEPING must throw SHOP_SLEEPING
       const email = 'sleep.test@rit.ac.in';
-      const otp = authService.requestOtp(email).previewCode!;
+      await authService.requestOtp(email);
+      const otp = emailService.getLastSentForTesting()!.code;
       const user = authService.verifyOtp(email, otp).user;
       authService.updateProfile(user.id, { fullName: 'Sleep Tester', roomNumber: 'D-1', phoneNumber: '+910000000000' });
 

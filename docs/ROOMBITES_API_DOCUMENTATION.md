@@ -18,13 +18,22 @@
   "email": "student@rit.ac.in"
 }
 ```
-- **Validation:** Must match regex `/^[a-zA-Z0-9._%+-]+@rit\.ac\.in$/i`.
+- **Validation & Rate Limits:**
+  - Must match `/^[a-zA-Z0-9._%+-]+@rit\.ac\.in$/i`.
+  - 60-second cooldown between consecutive requests.
+  - Maximum 5 requests per 15-minute rolling window.
 - **Response 200 OK:**
 ```json
 {
   "success": true,
-  "message": "Verification code dispatched to your institutional inbox.",
-  "expiresInSeconds": 600
+  "message": "If this is a valid institutional address, a verification code has been dispatched to your institutional inbox."
+}
+```
+- **Response 400 Bad Request (Rate Limited):**
+```json
+{
+  "success": false,
+  "error": "RATE_LIMITED: Please wait 45 seconds before requesting a new verification code."
 }
 ```
 

@@ -65,7 +65,7 @@ class ApiClient {
   // --- Auth Endpoints ---
   public auth = {
     requestOtp: (email: string) =>
-      this.request<{ success: boolean; message: string; previewCode?: string }>('/auth/request-otp', {
+      this.request<{ success: boolean; message: string }>('/auth/request-otp', {
         method: 'POST',
         body: JSON.stringify({ email })
       }),

@@ -9,6 +9,7 @@ coverage/
 *.db
 *.db-journal
 *.db-wal
+*.db-shm
 *.tsbuildinfo
 .gradle/
 *.apk
