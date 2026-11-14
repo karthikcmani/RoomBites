@@ -104,7 +104,11 @@ export class AuthService {
     // 5. Send Real Email via Transactional Email Provider
     // Note: NEVER log plaintext OTP to console in production
     if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
-      console.log(`[Auth] OTP dispatched to ${this.maskEmail(cleanEmail)}`);
+      if (!this.emailService.isEmailConfigured()) {
+        console.log(`[Auth DEV] SMTP not configured. Active verification code for ${cleanEmail}: [ ${code} ]`);
+      } else {
+        console.log(`[Auth] OTP dispatched to ${this.maskEmail(cleanEmail)}`);
+      }
     }
 
     await this.emailService.sendOtpEmail(cleanEmail, code);
