@@ -10,8 +10,9 @@ if (typeof window !== 'undefined') {
     window.location.protocol === 'capacitor:' ||
     ((window.location.protocol === 'http:' || window.location.protocol === 'https:') && window.location.hostname === 'localhost' && navigator.userAgent.includes('Android'));
 
-  if (isCapacitor) {
-    document.documentElement.style.setProperty('--app-safe-top', '28px');
+  if (isCapacitor || navigator.userAgent.includes('Android')) {
+    // 38px accommodates modern camera cutouts, notches, and high-DPI status bars
+    document.documentElement.style.setProperty('--app-safe-top', '38px');
   }
 }
 

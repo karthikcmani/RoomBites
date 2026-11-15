@@ -67,7 +67,12 @@ const AppContent: React.FC = () => {
       />
 
       {/* Main View Router */}
-      <main className="flex-1">
+      <main
+        className="flex-1"
+        style={{
+          paddingTop: 'calc(max(env(safe-area-inset-top, 0px), var(--app-safe-top, 0px)) + 4.25rem)'
+        }}
+      >
         {currentView === 'menu' && <CustomerHome />}
         {currentView === 'orders' && (
           <OrderHistoryPage
