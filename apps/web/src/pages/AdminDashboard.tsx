@@ -14,7 +14,8 @@ import {
   Coffee,
   Check,
   Send,
-  MessageSquare
+  MessageSquare,
+  MapPin
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import {
@@ -52,6 +53,30 @@ export const AdminDashboard: React.FC = () => {
   // Settle dues dialog state
   const [settlingCustomer, setSettlingCustomer] = useState<CustomerProfile | null>(null);
   const [settleAmountRupees, setSettleAmountRupees] = useState('');
+
+  // Seller room & contact location state
+  const [sellerRoom, setSellerRoom] = useState(shopSettings?.roomNumber || "Room 101 (Men's Hostel)");
+  const [sellerPhone, setSellerPhone] = useState(shopSettings?.emergencyContact || '+919876543210');
+  const [isEditingSeller, setIsEditingSeller] = useState(false);
+
+  useEffect(() => {
+    if (shopSettings?.roomNumber) setSellerRoom(shopSettings.roomNumber);
+    if (shopSettings?.emergencyContact) setSellerPhone(shopSettings.emergencyContact);
+  }, [shopSettings?.roomNumber, shopSettings?.emergencyContact]);
+
+  const handleSaveSellerInfo = async () => {
+    try {
+      await api.shop.updateSettings({
+        roomNumber: sellerRoom,
+        emergencyContact: sellerPhone
+      });
+      await refreshSettings();
+      setIsEditingSeller(false);
+      alert('Seller details updated & broadcasted live to all students!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to update seller details');
+    }
+  };
   const [settleDescription, setSettleDescription] = useState('Cash payment settled in room');
 
   // Announcement state
@@ -233,6 +258,71 @@ export const AdminDashboard: React.FC = () => {
           })}
         </div>
       </div>
+
+      {/* Seller Room & Contact Location Bar */}
+      <div className="p-3.5 rounded-2xl bg-slate-850 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-slate-300">
+          <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>
+            Mess Location: <strong className="text-white font-bold">{shopSettings?.roomNumber || "Room 101 (Men's Hostel)"}</strong>
+          </span>
+          <span className="text-slate-600 hidden sm:inline">•</span>
+          <span>
+            Contact: <strong className="text-white font-bold">{shopSettings?.emergencyContact || "+919876543210"}</strong>
+          </span>
+        </div>
+        <button
+          onClick={() => setIsEditingSeller(!isEditingSeller)}
+          className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-slate-800 text-amber-400 hover:bg-slate-750 border border-amber-500/30 transition-all shadow-sm"
+        >
+          {isEditingSeller ? 'Cancel' : 'Edit Room & Contact'}
+        </button>
+      </div>
+
+      {isEditingSeller && (
+        <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/40 space-y-3 animate-in fade-in">
+          <div>
+            <h4 className="font-bold text-xs text-white">Update Mess Room & Contact Phone</h4>
+            <p className="text-[11px] text-slate-400">Updates will be broadcasted live to all student devices instantly.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Hostel Room Number / Building</label>
+              <input
+                type="text"
+                value={sellerRoom}
+                onChange={e => setSellerRoom(e.target.value)}
+                placeholder="e.g. Room 101 (Men's Hostel)"
+                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Emergency Phone / WhatsApp</label>
+              <input
+                type="text"
+                value={sellerPhone}
+                onChange={e => setSellerPhone(e.target.value)}
+                placeholder="e.g. +919876543210"
+                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setIsEditingSeller(false)}
+              className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveSellerInfo}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors shadow-md"
+            >
+              Save & Broadcast Live
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -480,19 +570,42 @@ export const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-200">
-                  {onlinePresence.map(p => (
-                    <tr key={p.userId} className="hover:bg-slate-800/40">
-                      <td className="p-3 font-bold flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        {p.name || 'Student'}
-                      </td>
-                      <td className="p-3 text-slate-300">{p.roomNumber || 'Unknown'}</td>
-                      <td className="p-3 font-mono text-[11px] text-amber-400">{p.activity}</td>
-                      <td className="p-3 text-slate-400">
-                        {new Date(p.lastHeartbeat).toLocaleTimeString()}
-                      </td>
-                    </tr>
-                  ))}
+                  {onlinePresence.map(p => {
+                    const isGuest = p.isGuest || p.userId.startsWith('guest_');
+                    const rawTime = p.lastHeartbeat || (p as any).lastSeen || (p as any).lastPing;
+                    let formattedTime = 'Active now';
+                    if (rawTime) {
+                      const d = new Date(typeof rawTime === 'string' && !rawTime.includes('T') ? rawTime.replace(' ', 'T') + 'Z' : rawTime);
+                      if (!isNaN(d.getTime())) {
+                        formattedTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                      }
+                    }
+
+                    return (
+                      <tr key={p.userId} className="hover:bg-slate-800/40">
+                        <td className="p-3 font-bold flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${isGuest ? 'bg-amber-400' : 'bg-emerald-500'} animate-pulse`} />
+                          {isGuest ? (
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-slate-200">Guest Visitor</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 border border-amber-500/30">Browsing</span>
+                            </span>
+                          ) : (
+                            <span className="text-white">{p.name || 'Student'}</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {isGuest ? (
+                            <span className="text-slate-500 italic text-[11px]">Unauthenticated</span>
+                          ) : (
+                            <span className="text-slate-300 font-semibold">{p.roomNumber || 'Room ?'}</span>
+                          )}
+                        </td>
+                        <td className="p-3 font-mono text-[11px] text-amber-400">{p.activity}</td>
+                        <td className="p-3 text-slate-400">{formattedTime}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

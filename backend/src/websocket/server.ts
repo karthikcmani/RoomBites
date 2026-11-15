@@ -28,6 +28,7 @@ export class WebSocketBroker {
 
     this.wss.on('connection', (ws: WebSocket, req) => {
       let clientUser: AuthUser | null = null;
+      let guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
 
       // Extract token from query param or initial auth frame
       const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
@@ -41,6 +42,18 @@ export class WebSocketBroker {
         }
       }
 
+      if (!clientUser) {
+        // Register initial connection as Guest session
+        const guestUser: AuthUser = {
+          id: guestId,
+          email: 'guest@visitor',
+          role: 'CUSTOMER',
+          fullName: 'Guest Visitor',
+          roomNumber: 'Browsing App (Unauthenticated)'
+        };
+        this.registerClient(guestUser, ws);
+      }
+
       ws.on('message', (data: Buffer | string) => {
         try {
           const message = JSON.parse(data.toString());
@@ -48,6 +61,10 @@ export class WebSocketBroker {
           if (message.type === 'AUTH' && message.payload?.token) {
             const decoded = verifyToken(message.payload.token);
             if (decoded) {
+              // Transition from guest session to authenticated student session
+              if (!clientUser && guestId) {
+                this.unregisterClient(guestId, ws, true); // true = silent transition
+              }
               clientUser = decoded;
               this.registerClient(clientUser, ws);
               ws.send(JSON.stringify({ type: 'AUTH_SUCCESS', payload: { role: clientUser.role } }));
@@ -56,13 +73,19 @@ export class WebSocketBroker {
             }
           }
 
-          if (message.type === 'HEARTBEAT' && clientUser) {
-            const activity = message.payload?.activity || 'idle';
+          if (message.type === 'HEARTBEAT') {
+            const activity = message.payload?.activity || 'browsing_menu';
             const page = message.payload?.page || undefined;
-            this.presenceService.updatePresence(clientUser.id, activity, page);
+            const currentId = clientUser ? clientUser.id : guestId;
+            const isGuest = !clientUser;
+            const name = clientUser ? (clientUser.fullName || (clientUser.role === 'ADMIN' ? 'RoomBites Admin' : 'Student')) : 'Guest Visitor';
+            const roomNumber = clientUser ? (clientUser.roomNumber || (clientUser.role === 'ADMIN' ? 'Admin Room 101' : 'Room ?')) : 'Browsing App (Unauthenticated)';
+            const nowIso = new Date().toISOString();
+
+            this.presenceService.updatePresence(currentId, activity, page);
 
             // Update client ping
-            const userSockets = this.clients.get(clientUser.id);
+            const userSockets = this.clients.get(currentId);
             if (userSockets) {
               const client = userSockets.find(c => c.socket === ws);
               if (client) client.lastPing = new Date();
@@ -72,13 +95,16 @@ export class WebSocketBroker {
             this.broadcastToAdmins({
               type: 'PRESENCE_UPDATE',
               payload: {
-                userId: clientUser.id,
-                name: clientUser.fullName || 'Student',
-                roomNumber: clientUser.roomNumber || 'Room ?',
+                userId: currentId,
+                name,
+                roomNumber,
                 status: 'online',
+                isOnline: true,
+                isGuest,
                 activity,
                 page,
-                lastSeen: new Date().toISOString()
+                lastSeen: nowIso,
+                lastHeartbeat: nowIso
               }
             });
           }
@@ -92,16 +118,14 @@ export class WebSocketBroker {
       });
 
       ws.on('close', () => {
-        if (clientUser) {
-          this.unregisterClient(clientUser.id, ws);
-        }
+        const idToUnregister = clientUser ? clientUser.id : guestId;
+        this.unregisterClient(idToUnregister, ws);
       });
 
       ws.on('error', (err) => {
         console.error('[WebSocket] Socket error:', err);
-        if (clientUser) {
-          this.unregisterClient(clientUser.id, ws);
-        }
+        const idToUnregister = clientUser ? clientUser.id : guestId;
+        this.unregisterClient(idToUnregister, ws);
       });
     });
 
@@ -118,23 +142,28 @@ export class WebSocketBroker {
     });
     this.clients.set(user.id, existing);
 
-    this.presenceService.updatePresence(user.id, 'online');
+    const isGuest = user.id.startsWith('guest_');
+    this.presenceService.updatePresence(user.id, isGuest ? 'browsing_menu' : 'online');
 
+    const nowIso = new Date().toISOString();
     // Inform admins
     this.broadcastToAdmins({
       type: 'PRESENCE_UPDATE',
       payload: {
         userId: user.id,
-        name: user.fullName || 'Student',
-        roomNumber: user.roomNumber || 'Room ?',
+        name: user.fullName || (user.role === 'ADMIN' ? 'RoomBites Admin' : isGuest ? 'Guest Visitor' : 'Student'),
+        roomNumber: user.roomNumber || (user.role === 'ADMIN' ? 'Admin Room 101' : isGuest ? 'Browsing App (Unauthenticated)' : 'Room ?'),
         status: 'online',
-        activity: 'connected',
-        lastSeen: new Date().toISOString()
+        isOnline: true,
+        isGuest,
+        activity: isGuest ? 'browsing_menu' : 'connected',
+        lastSeen: nowIso,
+        lastHeartbeat: nowIso
       }
     });
   }
 
-  private unregisterClient(userId: string, socket: WebSocket) {
+  private unregisterClient(userId: string, socket: WebSocket, silentTransition = false) {
     const existing = this.clients.get(userId);
     if (!existing) return;
 
@@ -143,15 +172,19 @@ export class WebSocketBroker {
       this.clients.delete(userId);
       this.presenceService.setOffline(userId);
 
-      // Inform admins of disconnection
-      this.broadcastToAdmins({
-        type: 'PRESENCE_UPDATE',
-        payload: {
-          userId,
-          status: 'offline',
-          lastSeen: new Date().toISOString()
-        }
-      });
+      if (!silentTransition) {
+        // Inform admins of disconnection
+        this.broadcastToAdmins({
+          type: 'PRESENCE_UPDATE',
+          payload: {
+            userId,
+            status: 'offline',
+            isOnline: false,
+            lastSeen: new Date().toISOString(),
+            lastHeartbeat: new Date().toISOString()
+          }
+        });
+      }
     } else {
       this.clients.set(userId, filtered);
     }

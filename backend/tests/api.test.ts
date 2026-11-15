@@ -92,6 +92,39 @@ describe('RoomBites Comprehensive Backend & Security Test Suite', () => {
       assert.equal(profile.unpaidOrdersCount, 0);
       assert.equal(profile.outstandingBalancePaise, 0);
     });
+
+    test('Registers new student with OTP + Password + Profile, and allows subsequent password logins', async () => {
+      const email = 'karthik.new@rit.ac.in';
+      await authService.requestOtp(email);
+      const code = emailService.getLastSentForTesting()!.code;
+
+      // Register with password & full profile in one atomic step
+      const regRes = authService.registerWithPassword({
+        email,
+        code,
+        password: 'SecretPassword123',
+        fullName: 'Karthik C Mani',
+        roomNumber: 'Room 228',
+        phoneNumber: '+919876543210'
+      });
+
+      assert.ok(regRes.token);
+      assert.equal(regRes.user.email, email);
+      assert.equal(regRes.user.profile?.fullName, 'Karthik C Mani');
+      assert.equal(regRes.user.profile?.roomNumber, 'Room 228');
+
+      // Subsequent login with password (no OTP needed!)
+      const loginRes = authService.loginWithPassword(email, 'SecretPassword123');
+      assert.ok(loginRes.token);
+      assert.equal(loginRes.user.email, email);
+      assert.equal(loginRes.user.profile?.fullName, 'Karthik C Mani');
+      assert.equal(loginRes.user.profile?.roomNumber, 'Room 228');
+
+      // Incorrect password must fail
+      assert.throws(() => {
+        authService.loginWithPassword(email, 'WrongPassword!');
+      }, /INVALID_CREDENTIALS/);
+    });
   });
 
   describe('2. Authentication Security Controls & Abuse Prevention', () => {

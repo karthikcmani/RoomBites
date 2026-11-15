@@ -5,6 +5,39 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 const authService = new AuthService();
 
+router.post('/login', (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required.' });
+    }
+    const result = authService.loginWithPassword(email, password);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/register', (req: Request, res: Response) => {
+  try {
+    const { email, code, password, fullName, roomNumber, phoneNumber } = req.body;
+    if (!email || !code || !password || !fullName || !roomNumber || !phoneNumber) {
+      return res.status(400).json({ success: false, error: 'All registration fields (email, code, password, full name, room number, phone number) are required.' });
+    }
+    const result = authService.registerWithPassword({
+      email,
+      code,
+      password,
+      fullName,
+      roomNumber,
+      phoneNumber
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/request-otp', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;

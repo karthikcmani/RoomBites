@@ -86,6 +86,39 @@ class ApiClient {
 
   // --- Auth Endpoints ---
   public auth = {
+    login: async (email: string, password: string) => {
+      const res = await this.request<{
+        success: boolean;
+        token: string;
+        user: User & { profile?: CustomerProfile };
+      }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+      this.setToken(res.token);
+      return res;
+    },
+
+    register: async (data: {
+      email: string;
+      code: string;
+      password: string;
+      fullName: string;
+      roomNumber: string;
+      phoneNumber: string;
+    }) => {
+      const res = await this.request<{
+        success: boolean;
+        token: string;
+        user: User & { profile?: CustomerProfile };
+      }>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      this.setToken(res.token);
+      return res;
+    },
+
     requestOtp: (email: string) =>
       this.request<{ success: boolean; message: string }>('/auth/request-otp', {
         method: 'POST',

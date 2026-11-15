@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ProductService } from '../services/productService.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { WebSocketBroker } from '../websocket/server.js';
 
 const router = Router();
 const productService = new ProductService();
@@ -63,6 +64,10 @@ router.post('/', requireAuth, requireAdmin, (req: Request, res: Response) => {
       hasCustomization: Boolean(hasCustomization),
       customizationSchema
     });
+    WebSocketBroker.getInstance().broadcastAll({
+      type: 'PRODUCT_UPDATED',
+      payload: { product }
+    });
     res.status(201).json({ success: true, product });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });
@@ -73,6 +78,10 @@ router.post('/', requireAuth, requireAdmin, (req: Request, res: Response) => {
 router.patch('/:id', requireAuth, requireAdmin, (req: Request, res: Response) => {
   try {
     const product = productService.updateProduct(req.params.id, req.body);
+    WebSocketBroker.getInstance().broadcastAll({
+      type: 'PRODUCT_UPDATED',
+      payload: { product }
+    });
     res.json({ success: true, product });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });
@@ -84,6 +93,10 @@ router.patch('/:id/availability', requireAuth, requireAdmin, (req: Request, res:
   try {
     const { isAvailable } = req.body;
     const product = productService.toggleAvailability(req.params.id, Boolean(isAvailable));
+    WebSocketBroker.getInstance().broadcastAll({
+      type: 'PRODUCT_UPDATED',
+      payload: { product }
+    });
     res.json({ success: true, product });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });
@@ -95,6 +108,10 @@ router.patch('/:id/stock', requireAuth, requireAdmin, (req: Request, res: Respon
   try {
     const { stockStatus } = req.body;
     const product = productService.updateStockStatus(req.params.id, stockStatus);
+    WebSocketBroker.getInstance().broadcastAll({
+      type: 'PRODUCT_UPDATED',
+      payload: { product }
+    });
     res.json({ success: true, product });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });

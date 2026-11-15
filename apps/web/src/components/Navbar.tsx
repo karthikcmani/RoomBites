@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Coffee, ShieldCheck, User, LogIn, Settings } from 'lucide-react';
+import { Coffee, ShieldCheck, User, LogIn, Settings, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useRealtime } from '../contexts/RealtimeContext.js';
+import { useTheme } from '../contexts/ThemeContext.js';
 import { ServerSettingsModal } from './ServerSettingsModal.js';
 
 interface NavbarProps {
@@ -19,6 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { user, profile } = useAuth();
   const { isConnected, shopSettings } = useRealtime();
+  const { theme, toggleTheme } = useTheme();
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
 
   const status = shopSettings?.status || 'AVAILABLE';
@@ -59,6 +61,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Action Controls */}
           <div className="flex items-center gap-2">
+            {/* Theme Switcher Button */}
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-all active:scale-90"
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+              ) : (
+                <Moon className="w-3.5 h-3.5 text-indigo-500" />
+              )}
+            </button>
+
             {user ? (
               <>
                 {user.role === 'ADMIN' && (

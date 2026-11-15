@@ -40,6 +40,7 @@ export class DatabaseManager {
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
+        password_hash TEXT,
         role TEXT NOT NULL DEFAULT 'CUSTOMER',
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -249,6 +250,9 @@ export class DatabaseManager {
     `);
 
     // Schema migrations for existing databases
+    try {
+      this.db.exec("ALTER TABLE users ADD COLUMN password_hash TEXT;");
+    } catch {}
     try {
       this.db.exec("ALTER TABLE otps ADD COLUMN code_hash TEXT;");
     } catch {}

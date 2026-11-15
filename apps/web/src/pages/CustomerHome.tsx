@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw, MapPin, Phone } from 'lucide-react';
 import { api } from '../services/api.js';
 import { Category, Product } from '../types/index.js';
+import { useRealtime } from '../contexts/RealtimeContext.js';
 import { ShopStatusBanner } from '../components/ShopStatusBanner.js';
 import { CategoryBar } from '../components/CategoryBar.js';
 import { ProductCard } from '../components/ProductCard.js';
 import { ServerSettingsModal } from '../components/ServerSettingsModal.js';
 
 export const CustomerHome: React.FC = () => {
+  const { shopSettings } = useRealtime();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -19,6 +21,28 @@ export const CustomerHome: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [selectedCategoryId]);
+
+  // Real-time instant live stock update listener
+  useEffect(() => {
+    const handleProductUpdated = (event: any) => {
+      const updated: Product = event.detail?.product;
+      if (!updated) return;
+      setProducts(prev => {
+        const index = prev.findIndex(p => p.id === updated.id);
+        if (index >= 0) {
+          const next = [...prev];
+          next[index] = { ...next[index], ...updated };
+          return next;
+        }
+        return [updated, ...prev];
+      });
+    };
+
+    window.addEventListener('roombites:product-updated', handleProductUpdated);
+    return () => {
+      window.removeEventListener('roombites:product-updated', handleProductUpdated);
+    };
+  }, []);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -48,6 +72,25 @@ export const CustomerHome: React.FC = () => {
     <div className="max-w-4xl mx-auto px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+6rem)] space-y-3">
       {/* Operating Status Banner (Only visible when Kitchen is Sleeping/Busy) */}
       <ShopStatusBanner />
+
+      {/* Dynamic Seller Room & Contact Info as updated by Admin */}
+      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+        <div className="flex items-center gap-1.5 text-slate-300">
+          <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span className="text-[11px]">
+            Delivering from: <strong className="text-white font-semibold">{shopSettings?.roomNumber || "Room 101 (Men's Hostel)"}</strong>
+          </span>
+        </div>
+        {shopSettings?.emergencyContact && (
+          <a
+            href={`tel:${shopSettings.emergencyContact}`}
+            className="flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            <Phone className="w-3 h-3" />
+            <span>{shopSettings.emergencyContact}</span>
+          </a>
+        )}
+      </div>
 
       {/* Minimal Search Input */}
       <div className="relative">

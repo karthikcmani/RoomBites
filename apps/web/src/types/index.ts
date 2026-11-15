@@ -116,6 +116,7 @@ export interface CustomerPresence {
   name?: string;
   roomNumber?: string;
   isOnline: boolean;
+  isGuest?: boolean;
   activity: string;
   currentPage?: string;
   lastHeartbeat: string;
@@ -130,6 +131,8 @@ export interface ShopSetting {
   closingTimeIST: string;
   autoScheduleEnabled: boolean;
   emergencyContact?: string;
+  roomNumber?: string;
+  shopName?: string;
 }
 
 export interface Announcement {

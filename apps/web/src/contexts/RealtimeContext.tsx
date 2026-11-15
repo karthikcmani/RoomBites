@@ -155,19 +155,23 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               break;
 
             case 'SHOP_STATUS_CHANGED':
-              setShopSettings(prev => prev ? { ...prev, status: msg.payload.status, statusNote: msg.payload.statusNote } : null);
+              setShopSettings(prev => prev ? { ...prev, ...msg.payload } : msg.payload);
               addAlert(
                 'Kitchen Status Changed',
-                `Store is now ${msg.payload.status.toLowerCase()}`,
+                `Mess is now ${msg.payload.status?.toLowerCase() || 'updated'}${msg.payload.roomNumber ? ` • ${msg.payload.roomNumber}` : ''}`,
                 'info'
               );
+              break;
+
+            case 'PRODUCT_UPDATED':
+              window.dispatchEvent(new CustomEvent('roombites:product-updated', { detail: msg.payload }));
               break;
 
             case 'PRESENCE_UPDATE':
               if (user?.role === 'ADMIN') {
                 setOnlinePresence(prev => {
                   const filtered = prev.filter(p => p.userId !== msg.payload.userId);
-                  if (msg.payload.status === 'offline') return filtered;
+                  if (msg.payload.status === 'offline' || msg.payload.isOnline === false) return filtered;
                   return [msg.payload, ...filtered];
                 });
               }

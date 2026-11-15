@@ -43,6 +43,21 @@ export class AuthService {
     return `${visible}@${domain}`;
   }
 
+  public hashPassword(password: string): string {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(password.trim(), salt, 64).toString('hex');
+    return `${salt}:${hash}`;
+  }
+
+  public verifyPassword(password: string, storedHash: string): boolean {
+    if (!storedHash || !storedHash.includes(':')) return false;
+    const [salt, key] = storedHash.split(':');
+    const keyBuffer = Buffer.from(key, 'hex');
+    const derived = crypto.scryptSync(password.trim(), salt, 64);
+    if (keyBuffer.length !== derived.length) return false;
+    return crypto.timingSafeEqual(keyBuffer, derived);
+  }
+
   public async requestOtp(email: string): Promise<{ success: boolean; message: string }> {
     const cleanEmail = email.trim().toLowerCase();
 
@@ -220,6 +235,165 @@ export class AuthService {
           createdAt: profileRecord.created_at,
           updatedAt: profileRecord.updated_at
         } : undefined
+      }
+    };
+  }
+
+  public registerWithPassword(data: {
+    email: string;
+    code: string;
+    password: string;
+    fullName: string;
+    roomNumber: string;
+    phoneNumber: string;
+  }): { token: string; user: User & { profile?: CustomerProfile } } {
+    const cleanEmail = data.email.trim().toLowerCase();
+    const cleanPassword = data.password.trim();
+    const fullName = data.fullName.trim();
+    const roomNumber = data.roomNumber.trim();
+    const phoneNumber = data.phoneNumber.trim();
+
+    if (!cleanPassword || cleanPassword.length < 6) {
+      throw new Error('INVALID_PASSWORD: Password must be at least 6 characters.');
+    }
+    if (!fullName || !roomNumber || !phoneNumber) {
+      throw new Error('MISSING_FIELDS: Full name, room number, and phone number are required.');
+    }
+
+    // Verify OTP first
+    const otpRecord = this.db.prepare('SELECT * FROM otps WHERE email = ?').get(cleanEmail) as any;
+    if (!otpRecord) {
+      throw new Error('OTP_NOT_FOUND: Please request a new verification code.');
+    }
+    if (new Date() > new Date(otpRecord.expires_at)) {
+      this.db.prepare('DELETE FROM otps WHERE email = ?').run(cleanEmail);
+      throw new Error('OTP_EXPIRED: The verification code has expired. Please request a new one.');
+    }
+
+    const inputHash = this.hashOtp(cleanEmail, data.code);
+    const storedHash = otpRecord.code_hash || '';
+    const inputBuffer = Buffer.from(inputHash, 'utf8');
+    const storedBuffer = Buffer.from(storedHash, 'utf8');
+
+    let isValid = false;
+    if (inputBuffer.length === storedBuffer.length) {
+      isValid = crypto.timingSafeEqual(inputBuffer, storedBuffer);
+    } else {
+      crypto.timingSafeEqual(inputBuffer, inputBuffer);
+      isValid = false;
+    }
+
+    if (!isValid) {
+      throw new Error('INVALID_OTP: The entered verification code is incorrect.');
+    }
+
+    // OTP verified: delete it
+    this.db.prepare('DELETE FROM otps WHERE email = ?').run(cleanEmail);
+
+    const passwordHash = this.hashPassword(cleanPassword);
+
+    // Fetch or create user
+    let userRecord = this.db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail) as any;
+    const adminEmail = (process.env.ADMIN_EMAIL || 'admin@rit.ac.in').toLowerCase();
+    const isAdmin = cleanEmail === adminEmail || cleanEmail === 'roombites.rit@gmail.com' || cleanEmail === '25mp2576@rit.ac.in';
+
+    if (!userRecord) {
+      const newUserId = 'usr_' + crypto.randomUUID().slice(0, 12);
+      const role = isAdmin ? 'ADMIN' : 'CUSTOMER';
+      this.db.prepare(`
+        INSERT INTO users (id, email, password_hash, role, is_active)
+        VALUES (?, ?, ?, ?, 1)
+      `).run(newUserId, cleanEmail, passwordHash, role);
+      userRecord = this.db.prepare('SELECT * FROM users WHERE id = ?').get(newUserId);
+    } else {
+      this.db.prepare(`
+        UPDATE users
+        SET password_hash = ?, role = CASE WHEN ? THEN 'ADMIN' ELSE role END, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(passwordHash, isAdmin ? 1 : 0, userRecord.id);
+      userRecord = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userRecord.id);
+    }
+
+    // Create or update customer profile
+    this.updateProfile(userRecord.id, { fullName, roomNumber, phoneNumber });
+    const profileRecord = this.getProfile(userRecord.id);
+
+    const authPayload: AuthUser = {
+      id: userRecord.id,
+      email: userRecord.email,
+      role: userRecord.role,
+      fullName: profileRecord?.fullName,
+      roomNumber: profileRecord?.roomNumber
+    };
+
+    const token = signToken(authPayload);
+
+    return {
+      token,
+      user: {
+        id: userRecord.id,
+        email: userRecord.email,
+        role: userRecord.role,
+        isActive: Boolean(userRecord.is_active),
+        createdAt: userRecord.created_at,
+        updatedAt: userRecord.updated_at,
+        profile: profileRecord || undefined
+      }
+    };
+  }
+
+  public loginWithPassword(email: string, password: string): { token: string; user: User & { profile?: CustomerProfile } } {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      throw new Error('INVALID_CREDENTIALS: Email and password are required.');
+    }
+
+    let userRecord = this.db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail) as any;
+    if (!userRecord) {
+      throw new Error('INVALID_CREDENTIALS: Email or password is incorrect.');
+    }
+
+    // Default password support for initial admin if not yet registered
+    const isAdmin = cleanEmail === 'roombites.rit@gmail.com' || cleanEmail === '25mp2576@rit.ac.in';
+    if (!userRecord.password_hash && isAdmin && (cleanPassword === 'RoomBites@123' || cleanPassword === 'admin123')) {
+      const initialHash = this.hashPassword(cleanPassword);
+      this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(initialHash, userRecord.id);
+      userRecord.password_hash = initialHash;
+    }
+
+    if (!userRecord.password_hash) {
+      throw new Error('PASSWORD_NOT_SET: Password has not been set yet. Please register or verify with OTP first.');
+    }
+
+    const isValid = this.verifyPassword(cleanPassword, userRecord.password_hash);
+    if (!isValid) {
+      throw new Error('INVALID_CREDENTIALS: Email or password is incorrect.');
+    }
+
+    const profileRecord = this.getProfile(userRecord.id);
+
+    const authPayload: AuthUser = {
+      id: userRecord.id,
+      email: userRecord.email,
+      role: userRecord.role,
+      fullName: profileRecord?.fullName,
+      roomNumber: profileRecord?.roomNumber
+    };
+
+    const token = signToken(authPayload);
+
+    return {
+      token,
+      user: {
+        id: userRecord.id,
+        email: userRecord.email,
+        role: userRecord.role,
+        isActive: Boolean(userRecord.is_active),
+        createdAt: userRecord.created_at,
+        updatedAt: userRecord.updated_at,
+        profile: profileRecord || undefined
       }
     };
   }

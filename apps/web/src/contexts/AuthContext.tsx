@@ -7,6 +7,15 @@ interface AuthContextType {
   profile: CustomerProfile | null;
   token: string | null;
   isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: {
+    email: string;
+    code: string;
+    password: string;
+    fullName: string;
+    roomNumber: string;
+    phoneNumber: string;
+  }) => Promise<void>;
   requestOtp: (email: string) => Promise<{ success: boolean }>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   updateProfile: (data: { fullName: string; roomNumber: string; phoneNumber: string }) => Promise<void>;
@@ -52,6 +61,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshProfile();
   }, [token]);
 
+  const login = async (email: string, password: string) => {
+    const res = await api.auth.login(email, password);
+    setToken(res.token);
+    setUser(res.user);
+    if (res.user.profile) {
+      setProfile(res.user.profile);
+    }
+    localStorage.setItem('roombites_user', JSON.stringify(res.user));
+  };
+
+  const register = async (data: {
+    email: string;
+    code: string;
+    password: string;
+    fullName: string;
+    roomNumber: string;
+    phoneNumber: string;
+  }) => {
+    const res = await api.auth.register(data);
+    setToken(res.token);
+    setUser(res.user);
+    if (res.user.profile) {
+      setProfile(res.user.profile);
+    }
+    localStorage.setItem('roombites_user', JSON.stringify(res.user));
+  };
+
   const requestOtp = async (email: string) => {
     const res = await api.auth.requestOtp(email);
     return { success: res.success };
@@ -92,6 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profile,
         token,
         isLoading,
+        login,
+        register,
         requestOtp,
         verifyOtp,
         updateProfile,

@@ -170,6 +170,8 @@ export interface ShopSetting {
   closingTimeIST: string;
   autoScheduleEnabled: boolean;
   emergencyContact?: string;
+  roomNumber?: string;
+  shopName?: string;
   updatedAt: string;
 }
 

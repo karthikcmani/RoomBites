@@ -14,6 +14,8 @@ import { AdminDashboard } from './pages/AdminDashboard.js';
 import { Order } from './types/index.js';
 import { Bell, X } from 'lucide-react';
 
+import { ThemeProvider } from './contexts/ThemeContext.js';
+
 const AppContent: React.FC = () => {
   const { user } = useAuth();
   const { activeAlerts, dismissAlert } = useRealtime();
@@ -125,13 +127,15 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <RealtimeProvider>
-          <AppContent />
-        </RealtimeProvider>
-      </CartProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <CartProvider>
+          <RealtimeProvider>
+            <AppContent />
+          </RealtimeProvider>
+        </CartProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
