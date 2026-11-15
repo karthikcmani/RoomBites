@@ -53,7 +53,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setIsLoading(true);
     try {
       await verifyOtp(email.trim(), otp.trim());
-      setStep('profile');
+      const savedUserStr = localStorage.getItem('roombites_user');
+      const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+      if (savedUser?.profile?.roomNumber && savedUser?.profile?.phoneNumber) {
+        onClose();
+      } else {
+        setStep('profile');
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Invalid or expired OTP.');
     } finally {

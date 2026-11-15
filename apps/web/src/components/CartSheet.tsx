@@ -21,12 +21,19 @@ export const CartSheet: React.FC<CartSheetProps> = ({
   const { user, profile, refreshProfile } = useAuth();
 
   const [roomNumber, setRoomNumber] = useState(profile?.roomNumber || '');
+  const [isEditingRoom, setIsEditingRoom] = useState(false);
   const [instructions, setInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledFor, setScheduledFor] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (profile?.roomNumber && !roomNumber) {
+      setRoomNumber(profile.roomNumber);
+    }
+  }, [profile]);
 
   if (!isCartOpen) return null;
 
@@ -163,20 +170,55 @@ export const CartSheet: React.FC<CartSheetProps> = ({
             ))}
           </div>
 
-          {/* Delivery Room */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-amber-400" />
-              Delivery Room Number
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Men's Hostel B-204"
-              value={roomNumber}
-              onChange={e => setRoomNumber(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
+          {/* Delivery Location - Never re-ask if registered */}
+          {profile?.roomNumber && !isEditingRoom ? (
+            <div className="p-3 rounded-xl bg-slate-850/80 border border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                  <MapPin className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase font-semibold">Delivery To</p>
+                  <p className="text-xs font-bold text-white">{roomNumber || profile.roomNumber}</p>
+                  {profile.phoneNumber && (
+                    <p className="text-[10px] text-slate-400">Ph: {profile.phoneNumber}</p>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingRoom(true)}
+                className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20"
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                  Delivery Room Number
+                </label>
+                {profile?.roomNumber && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingRoom(false)}
+                    className="text-[10px] text-slate-400 hover:text-slate-200"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                placeholder="e.g. Men's Hostel B-204"
+                value={roomNumber}
+                onChange={e => setRoomNumber(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          )}
 
           {/* Cooking Instructions */}
           <div className="space-y-1.5">

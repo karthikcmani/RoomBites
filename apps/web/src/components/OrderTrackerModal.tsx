@@ -75,7 +75,8 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   };
 
   // Generate UPI payment intent URI
-  const upiPayUri = `upi://pay?pa=messoperator@upi&pn=RoomBites&am=${(order.totalPaise / 100).toFixed(2)}&cu=INR&tn=Order_${order.orderNumber}`;
+  const upiId = 'anikumaricmani-1@okicici';
+  const upiPayUri = `upi://pay?pa=${upiId}&pn=RoomBites&am=${(order.totalPaise / 100).toFixed(2)}&cu=INR&tn=Order_${order.orderNumber}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -200,14 +201,26 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   {formatINR(order.totalPaise)}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                You can pay via Google Pay, PhonePe, or Paytm using UPI Intent or scan when the seller arrives.
-              </p>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400">Send to UPI ID:</span>
+                  <span className="font-mono font-semibold text-amber-300">{upiId}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(upiId);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-[11px] font-bold border border-amber-500/30 transition-colors"
+                >
+                  Copy UPI ID
+                </button>
+              </div>
               <a
                 href={upiPayUri}
-                className="block text-center py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-amber-400 font-bold text-xs border border-amber-500/30 transition-colors"
+                className="block text-center py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all"
               >
-                Pay via Installed UPI App ({formatINR(order.totalPaise)})
+                Open Google Pay / PhonePe / Paytm ({formatINR(order.totalPaise)})
               </a>
             </div>
           )}

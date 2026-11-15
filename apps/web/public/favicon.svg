@@ -1,7 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
-  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
-  <line x1="6" y1="1" x2="6" y2="4"></line>
-  <line x1="10" y1="1" x2="10" y2="4"></line>
-  <line x1="14" y1="1" x2="14" y2="4"></line>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="24" fill="#0b0f19" />
+  <!-- Steaming aroma curls -->
+  <path d="M 40 22 C 37 28, 47 32, 44 38" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.9" />
+  <path d="M 56 19 C 53 26, 63 30, 60 37" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.9" />
+  <!-- Mug body -->
+  <rect x="30" y="42" width="40" height="38" rx="9" fill="#f59e0b" />
+  <ellipse cx="50" cy="42" rx="20" ry="5" fill="#fbbf24" />
+  <ellipse cx="50" cy="42" rx="17" ry="3.5" fill="#9a3412" />
+  <!-- Handle -->
+  <path d="M 67 47 C 82 47, 82 72, 67 72" stroke="#f59e0b" stroke-width="4.5" stroke-linecap="round" fill="none" />
+  <!-- Bite mark -->
+  <circle cx="30" cy="62" r="7.5" fill="#0b0f19" />
+  <!-- Midnight star sparkle -->
+  <path d="M 23 52 L 24 50 L 26 50 L 24.5 48.5 L 25 46.5 L 23 48 L 21 46.5 L 21.5 48.5 L 20 50 L 22 50 Z" fill="#fbbf24" />
 </svg>
