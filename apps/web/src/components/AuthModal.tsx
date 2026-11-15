@@ -31,8 +31,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!email.trim().toLowerCase().endsWith('@rit.ac.in')) {
-      setErrorMsg('Only valid @rit.ac.in institutional emails are permitted.');
+    const clean = email.trim().toLowerCase();
+    if (!clean.endsWith('@rit.ac.in') && clean !== 'roombites.rit@gmail.com') {
+      setErrorMsg('Only valid @rit.ac.in institutional emails (or admin login) are permitted.');
       return;
     }
 

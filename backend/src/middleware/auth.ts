@@ -62,6 +62,10 @@ export function verifyToken(token: string): AuthUser | null {
 export function isValidRitEmail(email: string): boolean {
   if (!email || typeof email !== 'string') return false;
   const cleanEmail = email.trim().toLowerCase();
+  const configuredAdmin = (process.env.ADMIN_EMAIL || 'roombites.rit@gmail.com').trim().toLowerCase();
+  if (cleanEmail === configuredAdmin || cleanEmail === 'roombites.rit@gmail.com') {
+    return true;
+  }
   // Validates standard institutional pattern: student@rit.ac.in or subdomains
   return /^[a-zA-Z0-9._%+-]+@rit\.ac\.in$/i.test(cleanEmail);
 }
