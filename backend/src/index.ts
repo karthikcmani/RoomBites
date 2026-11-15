@@ -1,4 +1,7 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -72,6 +75,18 @@ app.get('/health', (_req: Request, res: Response) => {
     service: 'RoomBites Backend Engine',
     version: '1.0.0'
   });
+});
+
+// Direct APK Download Endpoint for mobile test devices
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.get('/download-apk', (_req: Request, res: Response) => {
+  const apkPath = path.resolve(__dirname, '../../RoomBites-Latest.apk');
+  if (fs.existsSync(apkPath)) {
+    res.download(apkPath, 'RoomBites.apk');
+  } else {
+    res.status(404).json({ success: false, error: 'APK build not found' });
+  }
 });
 
 // Seed Initial Catalog and Admin
