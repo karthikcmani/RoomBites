@@ -23,6 +23,7 @@ interface RealtimeContextType {
   sendActivity: (activity: string, page?: string) => void;
   refreshSettings: () => Promise<void>;
   refreshAnnouncements: () => Promise<void>;
+  refreshPresence: () => Promise<void>;
 }
 
 const RealtimeContext = createContext<RealtimeContextType | undefined>(undefined);
@@ -75,6 +76,19 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const refreshPresence = async () => {
+    if (user?.role === 'ADMIN') {
+      try {
+        const res = await api.shop.getOnlinePresence();
+        if (res.presence) {
+          setOnlinePresence(res.presence);
+        }
+      } catch (err) {
+        console.error('Error fetching online presence:', err);
+      }
+    }
+  };
+
   const sendActivity = (activity: string, page?: string) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({
@@ -88,7 +102,10 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     refreshSettings();
     refreshAnnouncements();
-  }, []);
+    if (user?.role === 'ADMIN') {
+      refreshPresence();
+    }
+  }, [user?.role]);
 
   // WebSocket Connection Lifecycle
   useEffect(() => {
@@ -97,7 +114,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         socketRef.current.close();
       }
 
-      const wsUrl = getWebSocketUrl();
+      const wsUrl = getWebSocketUrl(token);
       const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 
@@ -167,6 +184,12 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               window.dispatchEvent(new CustomEvent('roombites:product-updated', { detail: msg.payload }));
               break;
 
+            case 'PRESENCE_ROSTER':
+              if (user?.role === 'ADMIN') {
+                setOnlinePresence(msg.payload.roster || []);
+              }
+              break;
+
             case 'PRESENCE_UPDATE':
               if (user?.role === 'ADMIN') {
                 setOnlinePresence(prev => {
@@ -205,7 +228,7 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (socketRef.current) socketRef.current.close();
     };
-  }, [token, user]);
+  }, [token, user?.id]);
 
   return (
     <RealtimeContext.Provider
@@ -218,7 +241,8 @@ export const RealtimeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         dismissAlert,
         sendActivity,
         refreshSettings,
-        refreshAnnouncements
+        refreshAnnouncements,
+        refreshPresence
       }}
     >
       {children}

@@ -8,7 +8,7 @@ export class ShopService {
 
   public getSettings(): ShopSetting {
     const row = this.db.prepare(`
-      SELECT s.*, sel.emergency_contact, sel.room_number, sel.shop_name
+      SELECT s.*, sel.emergency_contact, sel.room_number, sel.shop_name, sel.upi_id, sel.upi_name
       FROM shop_settings s
       LEFT JOIN sellers sel ON s.seller_id = sel.id
       WHERE s.seller_id = ?
@@ -26,6 +26,8 @@ export class ShopService {
         emergencyContact: '+919876543210',
         roomNumber: "Room 101 (Men's Hostel)",
         shopName: 'RoomBites Night Mess',
+        upiId: 'anikumaricmani-1@okicici',
+        upiName: 'Anikumari C Mani',
         updatedAt: new Date().toISOString()
       };
     }
@@ -41,6 +43,8 @@ export class ShopService {
       emergencyContact: row.emergency_contact || undefined,
       roomNumber: row.room_number || "Room 101 (Men's Hostel)",
       shopName: row.shop_name || 'RoomBites Night Mess',
+      upiId: row.upi_id || 'anikumaricmani-1@okicici',
+      upiName: row.upi_name || 'Anikumari C Mani',
       updatedAt: row.updated_at
     };
   }
@@ -54,6 +58,8 @@ export class ShopService {
     emergencyContact?: string;
     roomNumber?: string;
     shopName?: string;
+    upiId?: string;
+    upiName?: string;
   }): ShopSetting {
     const current = this.getSettings();
     const status = data.status || current.status;
@@ -69,15 +75,17 @@ export class ShopService {
       WHERE seller_id = 'seller_primary'
     `).run(status, note || null, openTime, closeTime, autoSchedule);
 
-    if (data.emergencyContact !== undefined || data.roomNumber !== undefined || data.shopName !== undefined) {
+    if (data.emergencyContact !== undefined || data.roomNumber !== undefined || data.shopName !== undefined || data.upiId !== undefined || data.upiName !== undefined) {
       const em = data.emergencyContact !== undefined ? data.emergencyContact.trim() : (current.emergencyContact || '');
       const rm = data.roomNumber !== undefined ? data.roomNumber.trim() : (current.roomNumber || 'Room 101');
       const sn = data.shopName !== undefined ? data.shopName.trim() : (current.shopName || 'RoomBites');
+      const upi = data.upiId !== undefined ? data.upiId.trim() : (current.upiId || 'anikumaricmani-1@okicici');
+      const upiName = data.upiName !== undefined ? data.upiName.trim() : (current.upiName || 'Anikumari C Mani');
       this.db.prepare(`
         UPDATE sellers
-        SET emergency_contact = ?, room_number = ?, shop_name = ?
+        SET emergency_contact = ?, room_number = ?, shop_name = ?, upi_id = ?, upi_name = ?
         WHERE id = 'seller_primary'
-      `).run(em, rm, sn);
+      `).run(em, rm, sn, upi, upiName);
     }
 
     const updated = this.getSettings();
@@ -90,7 +98,9 @@ export class ShopService {
         statusNote: updated.statusNote,
         emergencyContact: updated.emergencyContact,
         roomNumber: updated.roomNumber,
-        shopName: updated.shopName
+        shopName: updated.shopName,
+        upiId: updated.upiId,
+        upiName: updated.upiName
       }
     });
 

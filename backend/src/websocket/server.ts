@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'node:http';
 import { verifyToken, AuthUser } from '../middleware/auth.js';
 import { PresenceService } from '../services/presenceService.js';
+import { CustomerPresence } from '../types/index.js';
 
 interface ConnectedClient {
   socket: WebSocket;
@@ -28,9 +29,9 @@ export class WebSocketBroker {
 
     this.wss.on('connection', (ws: WebSocket, req) => {
       let clientUser: AuthUser | null = null;
-      let guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+      let registeredId: string | null = null;
 
-      // Extract token from query param or initial auth frame
+      // Extract token or device identifier
       const url = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`);
       const queryToken = url.searchParams.get('token');
 
@@ -38,20 +39,33 @@ export class WebSocketBroker {
         const decoded = verifyToken(queryToken);
         if (decoded) {
           clientUser = decoded;
+          registeredId = clientUser.id;
           this.registerClient(clientUser, ws);
         }
       }
 
       if (!clientUser) {
-        // Register initial connection as Guest session
+        // Derive stable guest id from remote IP or query parameter
+        const queryDevice = url.searchParams.get('deviceId');
+        const remoteIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'guest').replace(/[^a-zA-Z0-9]/g, '').slice(-8);
+        registeredId = queryDevice ? `dev_${queryDevice.slice(0, 8)}` : `guest_${remoteIp}`;
+
         const guestUser: AuthUser = {
-          id: guestId,
+          id: registeredId,
           email: 'guest@visitor',
           role: 'CUSTOMER',
           fullName: 'Guest Visitor',
           roomNumber: 'Browsing App (Unauthenticated)'
         };
         this.registerClient(guestUser, ws);
+      }
+
+      // If an admin just connected, immediately send them the current active presence roster
+      if (clientUser && clientUser.role === 'ADMIN') {
+        ws.send(JSON.stringify({
+          type: 'PRESENCE_ROSTER',
+          payload: { roster: this.getActiveRoster() }
+        }));
       }
 
       ws.on('message', (data: Buffer | string) => {
@@ -61,13 +75,22 @@ export class WebSocketBroker {
           if (message.type === 'AUTH' && message.payload?.token) {
             const decoded = verifyToken(message.payload.token);
             if (decoded) {
-              // Transition from guest session to authenticated student session
-              if (!clientUser && guestId) {
-                this.unregisterClient(guestId, ws, true); // true = silent transition
+              // Cleanly transition from previous temporary ID to real authenticated user
+              if (registeredId && registeredId !== decoded.id) {
+                this.unregisterClient(registeredId, ws);
               }
               clientUser = decoded;
+              registeredId = clientUser.id;
               this.registerClient(clientUser, ws);
               ws.send(JSON.stringify({ type: 'AUTH_SUCCESS', payload: { role: clientUser.role } }));
+
+              // If admin, send full active roster immediately
+              if (clientUser.role === 'ADMIN') {
+                ws.send(JSON.stringify({
+                  type: 'PRESENCE_ROSTER',
+                  payload: { roster: this.getActiveRoster() }
+                }));
+              }
             } else {
               ws.send(JSON.stringify({ type: 'AUTH_ERROR', error: 'Invalid token' }));
             }
@@ -76,37 +99,19 @@ export class WebSocketBroker {
           if (message.type === 'HEARTBEAT') {
             const activity = message.payload?.activity || 'browsing_menu';
             const page = message.payload?.page || undefined;
-            const currentId = clientUser ? clientUser.id : guestId;
-            const isGuest = !clientUser;
-            const name = clientUser ? (clientUser.fullName || (clientUser.role === 'ADMIN' ? 'RoomBites Admin' : 'Student')) : 'Guest Visitor';
-            const roomNumber = clientUser ? (clientUser.roomNumber || (clientUser.role === 'ADMIN' ? 'Admin Room 101' : 'Room ?')) : 'Browsing App (Unauthenticated)';
-            const nowIso = new Date().toISOString();
+            const targetId = registeredId || (clientUser ? clientUser.id : 'unknown');
 
-            this.presenceService.updatePresence(currentId, activity, page);
+            this.presenceService.updatePresence(targetId, activity, page);
 
             // Update client ping
-            const userSockets = this.clients.get(currentId);
+            const userSockets = this.clients.get(targetId);
             if (userSockets) {
               const client = userSockets.find(c => c.socket === ws);
               if (client) client.lastPing = new Date();
             }
 
-            // Broadcast presence to admins
-            this.broadcastToAdmins({
-              type: 'PRESENCE_UPDATE',
-              payload: {
-                userId: currentId,
-                name,
-                roomNumber,
-                status: 'online',
-                isOnline: true,
-                isGuest,
-                activity,
-                page,
-                lastSeen: nowIso,
-                lastHeartbeat: nowIso
-              }
-            });
+            // Broadcast current roster snapshot
+            this.broadcastPresenceRoster();
           }
 
           if (message.type === 'PING') {
@@ -118,14 +123,16 @@ export class WebSocketBroker {
       });
 
       ws.on('close', () => {
-        const idToUnregister = clientUser ? clientUser.id : guestId;
-        this.unregisterClient(idToUnregister, ws);
+        if (registeredId) {
+          this.unregisterClient(registeredId, ws);
+        }
       });
 
       ws.on('error', (err) => {
         console.error('[WebSocket] Socket error:', err);
-        const idToUnregister = clientUser ? clientUser.id : guestId;
-        this.unregisterClient(idToUnregister, ws);
+        if (registeredId) {
+          this.unregisterClient(registeredId, ws);
+        }
       });
     });
 
@@ -142,28 +149,14 @@ export class WebSocketBroker {
     });
     this.clients.set(user.id, existing);
 
-    const isGuest = user.id.startsWith('guest_');
+    const isGuest = user.id.startsWith('guest_') || user.id.startsWith('dev_');
     this.presenceService.updatePresence(user.id, isGuest ? 'browsing_menu' : 'online');
 
-    const nowIso = new Date().toISOString();
-    // Inform admins
-    this.broadcastToAdmins({
-      type: 'PRESENCE_UPDATE',
-      payload: {
-        userId: user.id,
-        name: user.fullName || (user.role === 'ADMIN' ? 'RoomBites Admin' : isGuest ? 'Guest Visitor' : 'Student'),
-        roomNumber: user.roomNumber || (user.role === 'ADMIN' ? 'Admin Room 101' : isGuest ? 'Browsing App (Unauthenticated)' : 'Room ?'),
-        status: 'online',
-        isOnline: true,
-        isGuest,
-        activity: isGuest ? 'browsing_menu' : 'connected',
-        lastSeen: nowIso,
-        lastHeartbeat: nowIso
-      }
-    });
+    // Broadcast authoritative updated roster to admins
+    this.broadcastPresenceRoster();
   }
 
-  private unregisterClient(userId: string, socket: WebSocket, silentTransition = false) {
+  private unregisterClient(userId: string, socket: WebSocket) {
     const existing = this.clients.get(userId);
     if (!existing) return;
 
@@ -171,23 +164,48 @@ export class WebSocketBroker {
     if (filtered.length === 0) {
       this.clients.delete(userId);
       this.presenceService.setOffline(userId);
-
-      if (!silentTransition) {
-        // Inform admins of disconnection
-        this.broadcastToAdmins({
-          type: 'PRESENCE_UPDATE',
-          payload: {
-            userId,
-            status: 'offline',
-            isOnline: false,
-            lastSeen: new Date().toISOString(),
-            lastHeartbeat: new Date().toISOString()
-          }
-        });
-      }
     } else {
       this.clients.set(userId, filtered);
     }
+
+    // Broadcast authoritative updated roster to admins
+    this.broadcastPresenceRoster();
+  }
+
+  public getActiveRoster(): CustomerPresence[] {
+    const roster: CustomerPresence[] = [];
+    const seenUserIds = new Set<string>();
+
+    for (const [userId, clientList] of this.clients.entries()) {
+      const activeSockets = clientList.filter(c => c.socket.readyState === WebSocket.OPEN);
+      if (activeSockets.length === 0) continue;
+
+      if (seenUserIds.has(userId)) continue;
+      seenUserIds.add(userId);
+
+      const client = activeSockets[0];
+      const isGuest = userId.startsWith('guest_') || userId.startsWith('dev_');
+
+      roster.push({
+        userId,
+        name: isGuest ? 'Guest Visitor' : (client.user.fullName || (client.user.role === 'ADMIN' ? 'RoomBites Admin' : 'Student')),
+        roomNumber: isGuest ? 'Browsing App (Unauthenticated)' : (client.user.roomNumber || (client.user.role === 'ADMIN' ? 'Admin Room 101' : 'Room ?')),
+        isOnline: true,
+        isGuest,
+        activity: isGuest ? 'browsing_menu' : 'online',
+        lastHeartbeat: client.lastPing ? client.lastPing.toISOString() : new Date().toISOString()
+      });
+    }
+
+    return roster;
+  }
+
+  public broadcastPresenceRoster() {
+    const roster = this.getActiveRoster();
+    this.broadcastToAdmins({
+      type: 'PRESENCE_ROSTER',
+      payload: { roster }
+    });
   }
 
   public broadcastToAdmins(message: { type: string; payload: any }) {

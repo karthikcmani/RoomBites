@@ -31,7 +31,7 @@ import { formatINR } from '../utils/currency.js';
 import { useRealtime } from '../contexts/RealtimeContext.js';
 
 export const AdminDashboard: React.FC = () => {
-  const { shopSettings, refreshSettings, onlinePresence } = useRealtime();
+  const { shopSettings, refreshSettings, onlinePresence, refreshPresence } = useRealtime();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'presence' | 'menu' | 'credit' | 'announcements'>('orders');
   const [metrics, setMetrics] = useState<any>(null);
@@ -57,22 +57,28 @@ export const AdminDashboard: React.FC = () => {
   // Seller room & contact location state
   const [sellerRoom, setSellerRoom] = useState(shopSettings?.roomNumber || "Room 101 (Men's Hostel)");
   const [sellerPhone, setSellerPhone] = useState(shopSettings?.emergencyContact || '+919876543210');
+  const [sellerUpiId, setSellerUpiId] = useState(shopSettings?.upiId || 'anikumaricmani-1@okicici');
+  const [sellerUpiName, setSellerUpiName] = useState(shopSettings?.upiName || 'Anikumari C Mani');
   const [isEditingSeller, setIsEditingSeller] = useState(false);
 
   useEffect(() => {
     if (shopSettings?.roomNumber) setSellerRoom(shopSettings.roomNumber);
     if (shopSettings?.emergencyContact) setSellerPhone(shopSettings.emergencyContact);
-  }, [shopSettings?.roomNumber, shopSettings?.emergencyContact]);
+    if (shopSettings?.upiId) setSellerUpiId(shopSettings.upiId);
+    if (shopSettings?.upiName) setSellerUpiName(shopSettings.upiName);
+  }, [shopSettings?.roomNumber, shopSettings?.emergencyContact, shopSettings?.upiId, shopSettings?.upiName]);
 
   const handleSaveSellerInfo = async () => {
     try {
       await api.shop.updateSettings({
         roomNumber: sellerRoom,
-        emergencyContact: sellerPhone
+        emergencyContact: sellerPhone,
+        upiId: sellerUpiId,
+        upiName: sellerUpiName
       });
       await refreshSettings();
       setIsEditingSeller(false);
-      alert('Seller details updated & broadcasted live to all students!');
+      alert('Seller details & UPI ID updated & broadcast live to all students!');
     } catch (err: any) {
       alert(err.message || 'Failed to update seller details');
     }
@@ -303,6 +309,26 @@ export const AdminDashboard: React.FC = () => {
                 value={sellerPhone}
                 onChange={e => setSellerPhone(e.target.value)}
                 placeholder="e.g. +919876543210"
+                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 block mb-1">UPI ID for Payments</label>
+              <input
+                type="text"
+                value={sellerUpiId}
+                onChange={e => setSellerUpiId(e.target.value)}
+                placeholder="e.g. anikumaricmani-1@okicici"
+                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-400"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Payee Name on UPI Bank Account</label>
+              <input
+                type="text"
+                value={sellerUpiName}
+                onChange={e => setSellerUpiName(e.target.value)}
+                placeholder="e.g. Anikumari C Mani"
                 className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
               />
             </div>
@@ -550,7 +576,16 @@ export const AdminDashboard: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-200">Online Students Roster</h3>
-            <span className="text-xs text-slate-400">{onlinePresence.length} connected</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">{onlinePresence.length} connected</span>
+              <button
+                onClick={() => refreshPresence()}
+                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                title="Refresh presence roster"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           {onlinePresence.length === 0 ? (

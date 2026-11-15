@@ -172,6 +172,8 @@ export interface ShopSetting {
   emergencyContact?: string;
   roomNumber?: string;
   shopName?: string;
+  upiId?: string;
+  upiName?: string;
   updatedAt: string;
 }
 

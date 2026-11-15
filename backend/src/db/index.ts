@@ -262,6 +262,12 @@ export class DatabaseManager {
     try {
       this.db.exec("ALTER TABLE otps ADD COLUMN request_count INTEGER DEFAULT 1;");
     } catch {}
+    try {
+      this.db.exec("ALTER TABLE sellers ADD COLUMN upi_id TEXT DEFAULT 'anikumaricmani-1@okicici';");
+    } catch {}
+    try {
+      this.db.exec("ALTER TABLE sellers ADD COLUMN upi_name TEXT DEFAULT 'Anikumari C Mani';");
+    } catch {}
   }
 
   public getRawDb(): DatabaseSync {

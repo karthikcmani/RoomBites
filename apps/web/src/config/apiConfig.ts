@@ -55,19 +55,31 @@ export function getApiBaseUrl(): string {
   return server ? `${server}/api/v1` : '/api/v1';
 }
 
-export function getWebSocketUrl(): string {
+export function getWebSocketUrl(token?: string | null): string {
   const server = getServerBaseUrl();
+  let base = 'ws://localhost:4000/ws';
   if (server) {
     const wsProto = server.startsWith('https:') ? 'wss:' : 'ws:';
     const hostWithPort = server.replace(/^https?:\/\//, '');
-    return `${wsProto}//${hostWithPort}/ws`;
-  }
-
-  // Web fallback using current window.location
-  if (typeof window !== 'undefined') {
+    base = `${wsProto}//${hostWithPort}/ws`;
+  } else if (typeof window !== 'undefined') {
     const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${wsProto}//${window.location.host}/ws`;
+    base = `${wsProto}//${window.location.host}/ws`;
   }
 
-  return 'ws://localhost:4000/ws';
+  const params = new URLSearchParams();
+  if (token) {
+    params.set('token', token);
+  }
+  if (typeof window !== 'undefined') {
+    let devId = localStorage.getItem('roombites_device_id');
+    if (!devId) {
+      devId = Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('roombites_device_id', devId);
+    }
+    params.set('deviceId', devId);
+  }
+
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
 }

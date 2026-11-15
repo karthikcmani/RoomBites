@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, Clock, ChefHat, Bike, AlertCircle, QrCode } from 'lucide-react';
+import { X, CheckCircle2, Clock, ChefHat, Bike, AlertCircle, QrCode, Copy, Check, ExternalLink } from 'lucide-react';
 import { Order, OrderStatus } from '../types/index.js';
 import { formatINR } from '../utils/currency.js';
 import { api } from '../services/api.js';
+import { useRealtime } from '../contexts/RealtimeContext.js';
 
 interface OrderTrackerModalProps {
   order: Order | null;
@@ -17,8 +18,10 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   onClose,
   onOrderUpdated
 }) => {
+  const { shopSettings } = useRealtime();
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
 
   if (!isOpen || !order) return null;
 
@@ -74,9 +77,20 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     }
   };
 
-  // Generate UPI payment intent URI
-  const upiId = 'anikumaricmani-1@okicici';
-  const upiPayUri = `upi://pay?pa=${upiId}&pn=RoomBites&am=${(order.totalPaise / 100).toFixed(2)}&cu=INR&tn=Order_${order.orderNumber}`;
+  // Generate clean UPI payment intent URI
+  const upiId = shopSettings?.upiId || 'anikumaricmani-1@okicici';
+  const upiName = shopSettings?.upiName || 'Anikumari C Mani';
+  const amountRupees = (order.totalPaise / 100).toFixed(2);
+  // Clean P2P payment parameters without e-commerce tags that trigger bank merchant limit errors
+  const upiPayUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&am=${amountRupees}&cu=INR`;
+
+  const handleCopyUpi = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(upiId);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2500);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -195,33 +209,60 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
                   <QrCode className="w-4 h-4 text-amber-400" />
-                  UPI Payment Pending
+                  UPI Payment Required
                 </span>
-                <span className="font-extrabold text-sm text-amber-400">
+                <span className="font-extrabold text-sm text-emerald-400">
                   {formatINR(order.totalPaise)}
                 </span>
               </div>
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-400">Send to UPI ID:</span>
-                  <span className="font-mono font-semibold text-amber-300">{upiId}</span>
+
+              {/* Verified Payee Details & 1-Tap Copy */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                <div className="flex flex-col min-w-0 pr-2">
+                  <span className="text-[10px] text-slate-400">Payee: <strong className="text-slate-200 font-semibold">{upiName}</strong></span>
+                  <span className="font-mono font-bold text-amber-300 text-xs truncate select-all">{upiId}</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(upiId);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-[11px] font-bold border border-amber-500/30 transition-colors"
+                  onClick={handleCopyUpi}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                    isCopied
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                      : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30'
+                  }`}
                 >
-                  Copy UPI ID
+                  {isCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy UPI</span>
+                    </>
+                  )}
                 </button>
               </div>
+
+              {/* Direct UPI App Launcher */}
               <a
                 href={upiPayUri}
-                className="block text-center py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all"
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all"
               >
-                Open Google Pay / PhonePe / Paytm ({formatINR(order.totalPaise)})
+                <span>Pay ₹{amountRupees} via GPay / PhonePe / Paytm</span>
+                <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
               </a>
+
+              {/* NPCI Limit Bypass Instructions */}
+              <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <p className="font-semibold text-amber-300 flex items-center gap-1">
+                  <span>💡 If GPay / PhonePe displays "exceeds limit" on direct click:</span>
+                </p>
+                <p className="text-slate-300 leading-relaxed">
+                  Tap <strong className="text-white">Copy UPI</strong> above $\rightarrow$ Open Google Pay or PhonePe $\rightarrow$ Select <strong className="text-amber-400">"Pay UPI ID"</strong> $\rightarrow$ Paste <code className="text-amber-300 font-mono font-bold">{upiId}</code> and transfer <strong>₹{amountRupees}</strong> directly. P2P transfers are free of merchant link restrictions!
+                </p>
+              </div>
             </div>
           )}
 

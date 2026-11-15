@@ -3,6 +3,7 @@ import { ShopService } from '../services/shopService.js';
 import { AnalyticsService } from '../services/analyticsService.js';
 import { PresenceService } from '../services/presenceService.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { WebSocketBroker } from '../websocket/server.js';
 
 const router = Router();
 const shopService = new ShopService();
@@ -76,7 +77,7 @@ router.get('/admin/analytics', requireAuth, requireAdmin, (_req: Request, res: R
 // Admin: Get Live Online Customer Presence
 router.get('/admin/presence', requireAuth, requireAdmin, (_req: Request, res: Response) => {
   try {
-    const online = presenceService.getOnlineCustomers();
+    const online = WebSocketBroker.getInstance().getActiveRoster();
     res.json({ success: true, presence: online });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

@@ -295,7 +295,7 @@ export class AuthService {
     // Fetch or create user
     let userRecord = this.db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail) as any;
     const adminEmail = (process.env.ADMIN_EMAIL || 'admin@rit.ac.in').toLowerCase();
-    const isAdmin = cleanEmail === adminEmail || cleanEmail === 'roombites.rit@gmail.com' || cleanEmail === '25mp2576@rit.ac.in';
+    const isAdmin = cleanEmail === adminEmail || cleanEmail === 'roombites.rit@gmail.com';
 
     if (!userRecord) {
       const newUserId = 'usr_' + crypto.randomUUID().slice(0, 12);
@@ -356,7 +356,7 @@ export class AuthService {
     }
 
     // Default password support for initial admin if not yet registered
-    const isAdmin = cleanEmail === 'roombites.rit@gmail.com' || cleanEmail === '25mp2576@rit.ac.in';
+    const isAdmin = cleanEmail === 'roombites.rit@gmail.com';
     if (!userRecord.password_hash && isAdmin && (cleanPassword === 'RoomBites@123' || cleanPassword === 'admin123')) {
       const initialHash = this.hashPassword(cleanPassword);
       this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(initialHash, userRecord.id);
