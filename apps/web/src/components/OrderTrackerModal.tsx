@@ -77,12 +77,11 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     }
   };
 
-  // Generate clean UPI payment intent URI
+  // Direct P2P UPI URI with UPI ID (avoids bank merchant limit errors)
   const upiId = shopSettings?.upiId || 'anikumaricmani-1@okicici';
   const upiName = shopSettings?.upiName || 'Anikumari C Mani';
   const amountRupees = (order.totalPaise / 100).toFixed(2);
-  // Clean P2P payment parameters without e-commerce tags that trigger bank merchant limit errors
-  const upiPayUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&am=${amountRupees}&cu=INR`;
+  const upiPayUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}`;
 
   const handleCopyUpi = () => {
     if (navigator.clipboard) {
@@ -90,6 +89,14 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2500);
     }
+  };
+
+  const handleOpenUpi = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(upiId).catch(() => {});
+    }
+    window.location.href = upiPayUri;
   };
 
   return (
@@ -246,23 +253,18 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
               </div>
 
               {/* Direct UPI App Launcher */}
-              <a
-                href={upiPayUri}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all"
+              <button
+                type="button"
+                onClick={handleOpenUpi}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
               >
-                <span>Pay ₹{amountRupees} via GPay / PhonePe / Paytm</span>
+                <span>Open UPI App (GPay / PhonePe / Paytm)</span>
                 <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
-              </a>
+              </button>
 
-              {/* NPCI Limit Bypass Instructions */}
-              <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                <p className="font-semibold text-amber-300 flex items-center gap-1">
-                  <span>💡 If GPay / PhonePe displays "exceeds limit" on direct click:</span>
-                </p>
-                <p className="text-slate-300 leading-relaxed">
-                  Tap <strong className="text-white">Copy UPI</strong> above $\rightarrow$ Open Google Pay or PhonePe $\rightarrow$ Select <strong className="text-amber-400">"Pay UPI ID"</strong> $\rightarrow$ Paste <code className="text-amber-300 font-mono font-bold">{upiId}</code> and transfer <strong>₹{amountRupees}</strong> directly. P2P transfers are free of merchant link restrictions!
-                </p>
-              </div>
+              <p className="text-[11px] text-slate-400 text-center">
+                Amount to pay: <strong className="text-white">₹{amountRupees}</strong>
+              </p>
             </div>
           )}
 

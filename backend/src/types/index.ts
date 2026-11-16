@@ -155,6 +155,7 @@ export interface CustomerPresence {
   name?: string;
   roomNumber?: string;
   isOnline: boolean;
+  isGuest?: boolean;
   activity: string;
   currentPage?: string;
   lastHeartbeat: string;

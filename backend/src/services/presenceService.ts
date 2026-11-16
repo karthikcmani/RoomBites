@@ -6,7 +6,8 @@ export class PresenceService {
   private guestPresence = new Map<string, { activity: string; currentPage?: string; lastHeartbeat: string }>();
 
   public updatePresence(userId: string, activity: string, currentPage?: string): void {
-    if (userId.startsWith('guest_')) {
+    const isGuest = userId.startsWith('guest_') || userId.startsWith('dev_');
+    if (isGuest) {
       this.guestPresence.set(userId, {
         activity,
         currentPage,
@@ -36,7 +37,8 @@ export class PresenceService {
   }
 
   public setOffline(userId: string): void {
-    if (userId.startsWith('guest_')) {
+    const isGuest = userId.startsWith('guest_') || userId.startsWith('dev_');
+    if (isGuest) {
       this.guestPresence.delete(userId);
       return;
     }

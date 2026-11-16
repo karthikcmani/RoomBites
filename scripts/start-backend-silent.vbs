@@ -1,3 +1,3 @@
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run chr(34) & "D:\RoomBites\scripts\run-backend.bat" & Chr(34), 0
+WshShell.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File ""D:\RoomBites\scripts\run-server-daemon.ps1""", 0, False
 Set WshShell = Nothing
