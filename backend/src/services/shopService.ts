@@ -27,7 +27,7 @@ export class ShopService {
         roomNumber: "Room 101 (Men's Hostel)",
         shopName: 'RoomBites Night Mess',
         upiId: 'anikumaricmani-1@okicici',
-        upiName: 'Anikumari C Mani',
+        upiName: 'Karthik C Mani',
         updatedAt: new Date().toISOString()
       };
     }
@@ -44,7 +44,7 @@ export class ShopService {
       roomNumber: row.room_number || "Room 101 (Men's Hostel)",
       shopName: row.shop_name || 'RoomBites Night Mess',
       upiId: row.upi_id || 'anikumaricmani-1@okicici',
-      upiName: row.upi_name || 'Anikumari C Mani',
+      upiName: row.upi_name || 'Karthik C Mani',
       updatedAt: row.updated_at
     };
   }
@@ -80,7 +80,7 @@ export class ShopService {
       const rm = data.roomNumber !== undefined ? data.roomNumber.trim() : (current.roomNumber || 'Room 101');
       const sn = data.shopName !== undefined ? data.shopName.trim() : (current.shopName || 'RoomBites');
       const upi = data.upiId !== undefined ? data.upiId.trim() : (current.upiId || 'anikumaricmani-1@okicici');
-      const upiName = data.upiName !== undefined ? data.upiName.trim() : (current.upiName || 'Anikumari C Mani');
+      const upiName = data.upiName !== undefined ? data.upiName.trim() : (current.upiName || 'Karthik C Mani');
       this.db.prepare(`
         UPDATE sellers
         SET emergency_contact = ?, room_number = ?, shop_name = ?, upi_id = ?, upi_name = ?

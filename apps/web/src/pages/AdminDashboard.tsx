@@ -58,7 +58,7 @@ export const AdminDashboard: React.FC = () => {
   const [sellerRoom, setSellerRoom] = useState(shopSettings?.roomNumber || "Room 101 (Men's Hostel)");
   const [sellerPhone, setSellerPhone] = useState(shopSettings?.emergencyContact || '+919876543210');
   const [sellerUpiId, setSellerUpiId] = useState(shopSettings?.upiId || 'anikumaricmani-1@okicici');
-  const [sellerUpiName, setSellerUpiName] = useState(shopSettings?.upiName || 'Anikumari C Mani');
+  const [sellerUpiName, setSellerUpiName] = useState(shopSettings?.upiName || 'Karthik C Mani');
   const [isEditingSeller, setIsEditingSeller] = useState(false);
 
   useEffect(() => {
@@ -328,7 +328,7 @@ export const AdminDashboard: React.FC = () => {
                 type="text"
                 value={sellerUpiName}
                 onChange={e => setSellerUpiName(e.target.value)}
-                placeholder="e.g. Anikumari C Mani"
+                placeholder="e.g. Karthik C Mani"
                 className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
               />
             </div>

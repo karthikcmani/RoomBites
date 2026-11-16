@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, CheckCircle2, Clock, ChefHat, Bike, AlertCircle, QrCode, Copy, Check, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, CheckCircle2, Clock, ChefHat, Bike, AlertCircle, QrCode, Copy, Check, ExternalLink, Phone, ChevronDown, ChevronUp } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Order, OrderStatus } from '../types/index.js';
 import { formatINR } from '../utils/currency.js';
 import { api } from '../services/api.js';
@@ -22,6 +23,9 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const [isCopiedPhone, setIsCopiedPhone] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [showQrCode, setShowQrCode] = useState(true);
 
   if (!isOpen || !order) return null;
 
@@ -77,11 +81,30 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     }
   };
 
-  // Direct P2P UPI URI with UPI ID (avoids bank merchant limit errors)
+  // Verified payee and amount configuration
   const upiId = shopSettings?.upiId || 'anikumaricmani-1@okicici';
-  const upiName = shopSettings?.upiName || 'Anikumari C Mani';
+  const upiName = shopSettings?.upiName || 'Karthik C Mani';
+  const sellerPhone = (shopSettings?.emergencyContact || '9847837607').replace(/[^0-9]/g, '').slice(-10);
   const amountRupees = (order.totalPaise / 100).toFixed(2);
-  const upiPayUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}`;
+
+  // Authoritative UPI Payment URIs with exact amount
+  const upiParams = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(`RoomBites ${order.orderNumber}`)}`;
+  const genericUpiUri = `upi://pay?${upiParams}`;
+  const gpayUri = `tez://upi/pay?${upiParams}`;
+  const phonepeUri = `phonepe://pay?${upiParams}`;
+  const paytmUri = `paytmmp://pay?${upiParams}`;
+
+  // Generate dynamic offline QR Code for current order total
+  useEffect(() => {
+    QRCode.toDataURL(genericUpiUri, {
+      width: 200,
+      margin: 1,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff'
+      }
+    }).then(setQrCodeDataUrl).catch(() => {});
+  }, [genericUpiUri]);
 
   const handleCopyUpi = () => {
     if (navigator.clipboard) {
@@ -91,12 +114,19 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     }
   };
 
-  const handleOpenUpi = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleCopyPhone = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(sellerPhone);
+      setIsCopiedPhone(true);
+      setTimeout(() => setIsCopiedPhone(false), 2500);
+    }
+  };
+
+  const handleOpenUpi = (targetUri: string = genericUpiUri) => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(upiId).catch(() => {});
     }
-    window.location.href = upiPayUri;
+    window.location.href = targetUri;
   };
 
   return (
@@ -212,59 +242,150 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
           {/* UPI Payment Assistance */}
           {order.paymentMethod === 'UPI' && order.paymentStatus === 'PENDING' && !isTerminated && (
-            <div className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-3">
+            <div className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-3.5">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
                   <QrCode className="w-4 h-4 text-amber-400" />
                   UPI Payment Required
                 </span>
-                <span className="font-extrabold text-sm text-emerald-400">
+                <span className="font-extrabold text-base text-emerald-400">
                   {formatINR(order.totalPaise)}
                 </span>
               </div>
 
-              {/* Verified Payee Details & 1-Tap Copy */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-                <div className="flex flex-col min-w-0 pr-2">
-                  <span className="text-[10px] text-slate-400">Payee: <strong className="text-slate-200 font-semibold">{upiName}</strong></span>
-                  <span className="font-mono font-bold text-amber-300 text-xs truncate select-all">{upiId}</span>
-                </div>
+              {/* Primary 1-Tap Action: Launches UPI App with Authoritative Amount */}
+              <button
+                type="button"
+                onClick={() => handleOpenUpi(genericUpiUri)}
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <span>Pay ₹{amountRupees} via UPI App</span>
+                <ExternalLink className="w-4 h-4 stroke-[2.5]" />
+              </button>
+
+              {/* Quick Direct App Selectors */}
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={handleCopyUpi}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
-                    isCopied
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30'
-                  }`}
+                  onClick={() => handleOpenUpi(gpayUri)}
+                  className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-750 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1 active:scale-95 transition-all"
                 >
-                  {isCopied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy UPI</span>
-                    </>
-                  )}
+                  <span className="text-amber-400 font-bold">G</span>Pay
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenUpi(phonepeUri)}
+                  className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-755 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1 active:scale-95 transition-all"
+                >
+                  <span className="text-purple-400 font-bold">Phone</span>Pe
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenUpi(paytmUri)}
+                  className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-755 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1 active:scale-95 transition-all"
+                >
+                  <span className="text-sky-400 font-bold">Pay</span>tm
                 </button>
               </div>
 
-              {/* Direct UPI App Launcher */}
-              <button
-                type="button"
-                onClick={handleOpenUpi}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <span>Open UPI App (GPay / PhonePe / Paytm)</span>
-                <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
-              </button>
+              {/* Dynamic QR Code Card (Solves "Pay via Scanning QR" Paytm Alert) */}
+              <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowQrCode(prev => !prev)}
+                  className="w-full flex items-center justify-between text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Scan QR Code (Direct ₹{amountRupees})</span>
+                  </span>
+                  {showQrCode ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                </button>
 
-              <p className="text-[11px] text-slate-400 text-center">
-                Amount to pay: <strong className="text-white">₹{amountRupees}</strong>
-              </p>
+                {showQrCode && (
+                  <div className="flex flex-col items-center pt-2 pb-1 space-y-2">
+                    {qrCodeDataUrl ? (
+                      <div className="p-3 bg-white rounded-2xl shadow-md border-2 border-amber-500/30">
+                        <img
+                          src={qrCodeDataUrl}
+                          alt={`Pay ₹${amountRupees} QR`}
+                          className="w-44 h-44 object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-44 h-44 flex items-center justify-center bg-slate-800 rounded-xl text-slate-400 text-xs">
+                        Loading QR...
+                      </div>
+                    )}
+                    <p className="text-[10px] text-slate-400 text-center max-w-[240px]">
+                      Scan with Google Pay, PhonePe, Paytm, or choose <strong className="text-slate-200">"Scan QR from Gallery"</strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Direct UPI ID & Mobile Number Fallback (Solves Paytm Protect Alert) */}
+              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <span className="text-[10px] text-slate-400">Payee: <strong className="text-slate-200 font-semibold">{upiName}</strong></span>
+                    <span className="font-mono font-bold text-amber-300 text-xs truncate select-all">{upiId}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyUpi}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                      isCopied
+                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                        : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    {isCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy UPI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Mobile Number Transfer (Direct Paytm/GPay Contact Option) */}
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/80">
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-emerald-400" />
+                      <span>Pay via Mobile Number (Paytm Protect):</span>
+                    </span>
+                    <span className="font-mono font-bold text-emerald-300 text-xs">{sellerPhone}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyPhone}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                      isCopiedPhone
+                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                        : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
+                    }`}
+                  >
+                    {isCopiedPhone ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Number</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

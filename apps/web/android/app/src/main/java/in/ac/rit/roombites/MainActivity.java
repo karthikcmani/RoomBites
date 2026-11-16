@@ -22,17 +22,8 @@ public class MainActivity extends BridgeActivity {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     Uri url = request.getUrl();
-                    if (url != null && "upi".equalsIgnoreCase(url.getScheme())) {
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_VIEW, url);
-                            Intent chooser = Intent.createChooser(intent, "Pay via UPI App");
-                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            startActivity(chooser);
-                            return true;
-                        } catch (Exception e) {
-                            Toast.makeText(MainActivity.this, "Unable to open UPI app. Please copy the UPI ID.", Toast.LENGTH_SHORT).show();
-                            return true;
-                        }
+                    if (handleUpiLaunch(url)) {
+                        return true;
                     }
                     return super.shouldOverrideUrlLoading(view, request);
                 }
@@ -40,19 +31,44 @@ public class MainActivity extends BridgeActivity {
                 @Deprecated
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                    if (url != null && url.startsWith("upi://")) {
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                            Intent chooser = Intent.createChooser(intent, "Pay via UPI App");
-                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            startActivity(chooser);
-                            return true;
-                        } catch (Exception e) {
-                            Toast.makeText(MainActivity.this, "Unable to open UPI app. Please copy the UPI ID.", Toast.LENGTH_SHORT).show();
-                            return true;
-                        }
+                    if (url != null && handleUpiLaunch(Uri.parse(url))) {
+                        return true;
                     }
                     return super.shouldOverrideUrlLoading(view, url);
+                }
+
+                private boolean handleUpiLaunch(Uri url) {
+                    if (url == null) return false;
+                    String scheme = url.getScheme();
+                    if (scheme == null) return false;
+
+                    String s = scheme.toLowerCase();
+                    if (s.equals("upi") || s.equals("tez") || s.equals("phonepe") || s.equals("paytmmp")) {
+                        try {
+                            Intent intent = new Intent(Intent.ACTION_VIEW, url);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            // If it's generic upi://, open chooser
+                            if (s.equals("upi")) {
+                                Intent chooser = Intent.createChooser(intent, "Pay with UPI");
+                                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(chooser);
+                            } else {
+                                startActivity(intent);
+                            }
+                            return true;
+                        } catch (Exception e) {
+                            try {
+                                Intent fallback = new Intent(Intent.ACTION_VIEW, url);
+                                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(Intent.createChooser(fallback, "Pay via UPI App"));
+                                return true;
+                            } catch (Exception ex) {
+                                Toast.makeText(MainActivity.this, "Unable to launch UPI app. Please scan the QR code or copy UPI ID.", Toast.LENGTH_LONG).show();
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
                 }
             });
         }
