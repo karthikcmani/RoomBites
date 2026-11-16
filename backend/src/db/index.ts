@@ -266,7 +266,10 @@ export class DatabaseManager {
       this.db.exec("ALTER TABLE sellers ADD COLUMN upi_id TEXT DEFAULT 'anikumaricmani-1@okicici';");
     } catch {}
     try {
-      this.db.exec("ALTER TABLE sellers ADD COLUMN upi_name TEXT DEFAULT 'Anikumari C Mani';");
+      this.db.exec("ALTER TABLE sellers ADD COLUMN upi_name TEXT DEFAULT 'Karthik C Mani';");
+    } catch {}
+    try {
+      this.db.exec("ALTER TABLE orders ADD COLUMN transaction_ref TEXT;");
     } catch {}
   }
 

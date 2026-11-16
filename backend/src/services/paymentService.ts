@@ -98,6 +98,53 @@ export class PaymentService {
     };
   }
 
+  public submitUtr(customerId: string, orderId: string, transactionRef: string): any {
+    const cleanRef = transactionRef?.trim();
+    if (!cleanRef || cleanRef.length < 6 || cleanRef.length > 35) {
+      throw new Error('INVALID_UTR: Please enter a valid UPI UTR or reference number (6-35 characters).');
+    }
+
+    const order = this.db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+    if (!order) throw new Error('NOT_FOUND: Order not found.');
+
+    if (order.customer_id !== customerId) {
+      const user = this.db.prepare('SELECT role FROM users WHERE id = ?').get(customerId) as any;
+      if (user?.role !== 'ADMIN') {
+        throw new Error('UNAUTHORIZED: You can only submit transaction references for your own orders.');
+      }
+    }
+
+    if (order.payment_method !== 'UPI') {
+      throw new Error('INVALID_PAYMENT_METHOD: Transaction references can only be submitted for UPI orders.');
+    }
+
+    this.db.prepare(`
+      UPDATE orders
+      SET transaction_ref = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(cleanRef, orderId);
+
+    // Broadcast update
+    WebSocketBroker.getInstance().broadcastToAdmins({
+      type: 'ORDER_UPDATED',
+      payload: {
+        orderId,
+        orderNumber: order.order_number,
+        transactionRef: cleanRef,
+        status: order.status,
+        paymentStatus: order.payment_status
+      }
+    });
+
+    return {
+      id: order.id,
+      orderNumber: order.order_number,
+      transactionRef: cleanRef,
+      status: order.status,
+      paymentStatus: order.payment_status
+    };
+  }
+
   public requestCredit(customerId: string): CustomerProfile {
     const profile = this.db.prepare('SELECT * FROM customer_profiles WHERE user_id = ?').get(customerId) as any;
     if (!profile) throw new Error('PROFILE_REQUIRED: Complete your profile first.');

@@ -167,7 +167,7 @@ export const AdminDashboard: React.FC = () => {
         orderId: order.id,
         paymentMethod: order.paymentMethod,
         amountPaise: order.totalPaise,
-        transactionRef: `MANUAL_ADMIN_${Date.now()}`
+        transactionRef: order.transactionRef || `MANUAL_ADMIN_${Date.now()}`
       });
       await loadAll();
     } catch (err: any) {
@@ -548,13 +548,20 @@ export const AdminDashboard: React.FC = () => {
                     )}
 
                     {order.paymentStatus === 'PENDING' && (
-                      <button
-                        onClick={() => handleVerifyPayment(order)}
-                        className="px-2.5 py-1.5 rounded-lg bg-surface-elevated text-emerald-600 dark:text-emerald-400 font-bold text-[11px] border border-border-subtle"
-                        title="Mark payment verified"
-                      >
-                        Verify Payment
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {order.transactionRef && (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 truncate max-w-[140px]">
+                            UTR: {order.transactionRef}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => handleVerifyPayment(order)}
+                          className="px-2.5 py-1.5 rounded-lg bg-surface-elevated text-emerald-600 dark:text-emerald-400 font-bold text-[11px] border border-border-subtle hover:bg-emerald-500/10 transition-colors"
+                          title="Mark payment verified"
+                        >
+                          Verify Payment
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

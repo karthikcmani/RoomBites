@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, Clock, ChefHat, Bike, AlertCircle, QrCode, Copy, Check, ExternalLink, Phone, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, CheckCircle2, Clock, ChefHat, Bike, AlertCircle, QrCode, Copy, Check, ExternalLink, Phone, ChevronDown, ChevronUp, ShieldAlert, Send } from 'lucide-react';
 import QRCode from 'qrcode';
 import { Order, OrderStatus } from '../types/index.js';
 import { formatINR } from '../utils/currency.js';
+import { buildUpiUri, buildUpiQrString, formatPaiseToRupees, isValidVpa } from '../utils/upi.js';
 import { api } from '../services/api.js';
 import { useRealtime } from '../contexts/RealtimeContext.js';
 
@@ -22,10 +23,14 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   const { shopSettings } = useRealtime();
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isCopied, setIsCopied] = useState(false);
-  const [isCopiedPhone, setIsCopiedPhone] = useState(false);
+  const [copiedTarget, setCopiedTarget] = useState<string | null>(null);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [showQrCode, setShowQrCode] = useState(true);
+
+  // UTR submission state
+  const [utrInput, setUtrInput] = useState('');
+  const [isSubmittingUtr, setIsSubmittingUtr] = useState(false);
+  const [utrSuccessMsg, setUtrSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen || !order) return null;
 
@@ -81,52 +86,96 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
     }
   };
 
-  // Verified payee and amount configuration
-  const upiId = shopSettings?.upiId || 'anikumaricmani-1@okicici';
+  // Verified payee details and precise amount configuration
+  const rawUpiId = shopSettings?.upiId || 'anikumaricmani-1@okicici';
+  const upiId = isValidVpa(rawUpiId) ? rawUpiId : 'anikumaricmani-1@okicici';
   const upiName = shopSettings?.upiName || 'Karthik C Mani';
   const sellerPhone = (shopSettings?.emergencyContact || '9847837607').replace(/[^0-9]/g, '').slice(-10);
-  const amountRupees = (order.totalPaise / 100).toFixed(2);
+  const amountRupees = formatPaiseToRupees(order.totalPaise);
 
-  // Authoritative UPI Payment URIs with exact amount
-  const upiParams = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(`RoomBites ${order.orderNumber}`)}`;
-  const genericUpiUri = `upi://pay?${upiParams}`;
-  const gpayUri = `tez://upi/pay?${upiParams}`;
-  const phonepeUri = `phonepe://pay?${upiParams}`;
-  const paytmUri = `paytmmp://pay?${upiParams}`;
+  // Authoritative, standards-compliant NPCI UPI Payment URIs
+  const genericUpiUri = buildUpiUri({
+    vpa: upiId,
+    payeeName: upiName,
+    amountPaise: order.totalPaise,
+    orderNumber: order.orderNumber
+  });
 
-  // Generate dynamic offline QR Code for current order total
+  const gpayUri = buildUpiUri({
+    vpa: upiId,
+    payeeName: upiName,
+    amountPaise: order.totalPaise,
+    orderNumber: order.orderNumber,
+    app: 'gpay'
+  });
+
+  const phonepeUri = buildUpiUri({
+    vpa: upiId,
+    payeeName: upiName,
+    amountPaise: order.totalPaise,
+    orderNumber: order.orderNumber,
+    app: 'phonepe'
+  });
+
+  const paytmUri = buildUpiUri({
+    vpa: upiId,
+    payeeName: upiName,
+    amountPaise: order.totalPaise,
+    orderNumber: order.orderNumber,
+    app: 'paytm'
+  });
+
+  const qrUri = buildUpiQrString({
+    vpa: upiId,
+    payeeName: upiName,
+    amountPaise: order.totalPaise,
+    orderNumber: order.orderNumber
+  });
+
+  // Dynamic offline QR code generation with exact order total and recipient
   useEffect(() => {
-    QRCode.toDataURL(genericUpiUri, {
-      width: 200,
+    QRCode.toDataURL(qrUri, {
+      width: 220,
       margin: 1,
       color: {
         dark: '#0f172a',
         light: '#ffffff'
       }
     }).then(setQrCodeDataUrl).catch(() => {});
-  }, [genericUpiUri]);
+  }, [qrUri]);
 
-  const handleCopyUpi = () => {
+  const handleCopy = (text: string, label: string) => {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(upiId);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2500);
-    }
-  };
-
-  const handleCopyPhone = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(sellerPhone);
-      setIsCopiedPhone(true);
-      setTimeout(() => setIsCopiedPhone(false), 2500);
+      navigator.clipboard.writeText(text);
+      setCopiedTarget(label);
+      setTimeout(() => setCopiedTarget(null), 2500);
     }
   };
 
   const handleOpenUpi = (targetUri: string = genericUpiUri) => {
+    // Copy UPI ID to clipboard as a helpful fallback
     if (navigator.clipboard) {
       navigator.clipboard.writeText(upiId).catch(() => {});
     }
     window.location.href = targetUri;
+  };
+
+  const handleSubmitUtr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!utrInput.trim()) return;
+    setIsSubmittingUtr(true);
+    setErrorMsg(null);
+    setUtrSuccessMsg(null);
+    try {
+      const res = await api.payments.submitUtr(order.id, utrInput.trim());
+      setUtrSuccessMsg('UTR submitted! The seller will verify receipt before delivery.');
+      setUtrInput('');
+      onOrderUpdated({ ...order, transactionRef: res.order.transactionRef });
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to submit UTR.');
+    } finally {
+      setIsSubmittingUtr(false);
+    }
   };
 
   return (
@@ -150,6 +199,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
           <button
             onClick={onClose}
             className="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center text-text-muted hover:text-text-main transition-colors"
+            aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>
@@ -160,6 +210,13 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
           {errorMsg && (
             <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs">
               {errorMsg}
+            </div>
+          )}
+
+          {utrSuccessMsg && (
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{utrSuccessMsg}</span>
             </div>
           )}
 
@@ -240,152 +297,223 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
             </div>
           )}
 
-          {/* UPI Payment Assistance */}
-          {order.paymentMethod === 'UPI' && order.paymentStatus === 'PENDING' && !isTerminated && (
+          {/* UPI Payment Assistance & Flow */}
+          {order.paymentMethod === 'UPI' && !isTerminated && (
             <div className="p-3.5 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-text-main flex items-center gap-1.5">
                   <QrCode className="w-4 h-4 text-accent" />
-                  UPI Payment Required
+                  <span>UPI Payment</span>
                 </span>
-                <span className="font-extrabold text-sm text-text-main">
-                  {formatINR(order.totalPaise)}
-                </span>
-              </div>
-
-              {/* Primary 1-Tap Action: Launches UPI App with Authoritative Amount */}
-              <button
-                type="button"
-                onClick={() => handleOpenUpi(genericUpiUri)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent text-slate-950 font-extrabold text-xs shadow-md shadow-accent/20 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <span>Pay ₹{amountRupees} via UPI App</span>
-                <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
-              </button>
-
-              {/* Quick Direct App Selectors */}
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleOpenUpi(gpayUri)}
-                  className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
-                >
-                  <span className="text-amber-500 font-bold">G</span>Pay
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOpenUpi(phonepeUri)}
-                  className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
-                >
-                  <span className="text-purple-500 font-bold">Phone</span>Pe
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOpenUpi(paytmUri)}
-                  className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
-                >
-                  <span className="text-sky-500 font-bold">Pay</span>tm
-                </button>
-              </div>
-
-              {/* Dynamic QR Code Card (Solves "Pay via Scanning QR" Paytm Alert) */}
-              <div className="rounded-xl bg-surface border border-border-subtle p-3 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setShowQrCode(prev => !prev)}
-                  className="w-full flex items-center justify-between text-xs font-semibold text-text-main transition-colors"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <QrCode className="w-3.5 h-3.5 text-accent" />
-                    <span>Scan QR Code (Direct ₹{amountRupees})</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                    order.paymentStatus === 'VERIFIED'
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  }`}>
+                    {order.paymentStatus === 'VERIFIED' ? 'Payment Verified' : 'Pending Verification'}
                   </span>
-                  {showQrCode ? <ChevronUp className="w-4 h-4 text-text-dim" /> : <ChevronDown className="w-4 h-4 text-text-dim" />}
-                </button>
+                  <span className="font-extrabold text-sm text-text-main">
+                    {formatINR(order.totalPaise)}
+                  </span>
+                </div>
+              </div>
 
-                {showQrCode && (
-                  <div className="flex flex-col items-center pt-1 space-y-1.5">
-                    {qrCodeDataUrl ? (
-                      <div className="p-2 bg-white rounded-xl shadow-sm border border-border-subtle">
-                        <img
-                          src={qrCodeDataUrl}
-                          alt={`Pay ₹${amountRupees} QR`}
-                          className="w-40 h-40 object-contain"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-40 h-40 flex items-center justify-center bg-surface-muted rounded-xl text-text-dim text-xs">
-                        Loading QR...
+              {order.paymentStatus === 'VERIFIED' ? (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>The seller has verified and recorded your UPI payment. Your order is being processed!</span>
+                </div>
+              ) : (
+                <>
+                  {/* Primary 1-Tap Action: Launches UPI App with Authoritative Exact Amount */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenUpi(genericUpiUri)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent text-slate-950 font-extrabold text-xs shadow-md shadow-accent/20 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    <span>Pay ₹{amountRupees} via UPI App</span>
+                    <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </button>
+
+                  {/* Direct App Launchers */}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenUpi(gpayUri)}
+                      className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
+                    >
+                      <span className="text-amber-500 font-bold">G</span>Pay
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenUpi(phonepeUri)}
+                      className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
+                    >
+                      <span className="text-purple-500 font-bold">Phone</span>Pe
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenUpi(paytmUri)}
+                      className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
+                    >
+                      <span className="text-sky-500 font-bold">Pay</span>tm
+                    </button>
+                  </div>
+
+                  {/* Dynamic QR Code Card (Guaranteed solution if UPI intent is blocked by risk policy) */}
+                  <div className="rounded-xl bg-surface border border-border-subtle p-3 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowQrCode(prev => !prev)}
+                      className="w-full flex items-center justify-between text-xs font-semibold text-text-main transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <QrCode className="w-3.5 h-3.5 text-accent" />
+                        <span>Scan Dynamic QR (Direct ₹{amountRupees})</span>
+                      </span>
+                      {showQrCode ? <ChevronUp className="w-4 h-4 text-text-dim" /> : <ChevronDown className="w-4 h-4 text-text-dim" />}
+                    </button>
+
+                    {showQrCode && (
+                      <div className="flex flex-col items-center pt-1 space-y-1.5">
+                        {qrCodeDataUrl ? (
+                          <div className="p-2 bg-white rounded-xl shadow-sm border border-border-subtle">
+                            <img
+                              src={qrCodeDataUrl}
+                              alt={`Pay ₹${amountRupees} QR`}
+                              className="w-40 h-40 object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-40 h-40 flex items-center justify-center bg-surface-muted rounded-xl text-text-dim text-xs">
+                            Loading QR...
+                          </div>
+                        )}
+                        <p className="text-[10px] text-text-muted text-center max-w-[260px]">
+                          Scan with Google Pay, PhonePe, Paytm, or take a screenshot and select <strong className="text-text-main">"Scan from Gallery"</strong>
+                        </p>
                       </div>
                     )}
-                    <p className="text-[10px] text-text-muted text-center max-w-[240px]">
-                      Scan with Google Pay, PhonePe, Paytm, or choose <strong className="text-text-main">"Scan from Gallery"</strong>
+                  </div>
+
+                  {/* Payee Details & Copy Actions */}
+                  <div className="p-2.5 rounded-xl bg-surface border border-border-subtle space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <span className="text-[10px] text-text-muted">Payee: <strong className="text-text-main font-semibold">{upiName}</strong></span>
+                        <span className="font-mono font-bold text-accent text-xs truncate select-all">{upiId}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(amountRupees, 'amount')}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold bg-surface-elevated hover:bg-surface-muted text-text-main border border-border-subtle transition-all"
+                        >
+                          {copiedTarget === 'amount' ? 'Copied ₹!' : `Copy ₹${amountRupees}`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(upiId, 'upi')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                            copiedTarget === 'upi'
+                              ? 'bg-emerald-500 text-slate-950'
+                              : 'bg-surface-elevated hover:bg-surface-muted text-text-main border border-border-subtle'
+                          }`}
+                        >
+                          {copiedTarget === 'upi' ? (
+                            <>
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy UPI</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Pay via Mobile Number Option (Direct Paytm/GPay Contact Solution) */}
+                    <div className="flex items-center justify-between pt-1.5 border-t border-border-subtle">
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <span className="text-[10px] text-text-muted flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-emerald-500" />
+                          <span>Pay via Mobile Number (UPI contact):</span>
+                        </span>
+                        <span className="font-mono font-bold text-text-main text-xs">{sellerPhone}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(sellerPhone, 'phone')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                          copiedTarget === 'phone'
+                            ? 'bg-emerald-500 text-slate-950'
+                            : 'bg-surface-elevated hover:bg-surface-muted text-text-main border border-border-subtle'
+                        }`}
+                      >
+                        {copiedTarget === 'phone' ? (
+                          <>
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* UTR / Transaction Reference Submission */}
+                  <div className="p-2.5 rounded-xl bg-surface border border-border-subtle space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-text-muted">Paid already? Submit 12-digit UPI UTR</span>
+                      {order.transactionRef && (
+                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                          Submitted: {order.transactionRef}
+                        </span>
+                      )}
+                    </div>
+                    {!order.transactionRef ? (
+                      <form onSubmit={handleSubmitUtr} className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={utrInput}
+                          onChange={e => setUtrInput(e.target.value)}
+                          placeholder="e.g. 432190821001"
+                          maxLength={35}
+                          className="flex-1 px-2.5 py-1.5 rounded-lg bg-surface-elevated border border-border-subtle text-xs text-text-main font-mono placeholder:text-text-dim focus:outline-none focus:border-accent"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSubmittingUtr || !utrInput.trim()}
+                          className="px-3 py-1.5 rounded-lg bg-accent text-slate-950 font-bold text-xs flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>Submit</span>
+                        </button>
+                      </form>
+                    ) : (
+                      <p className="text-[10px] text-text-muted">
+                        UTR submitted. Waiting for seller to verify on their device.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Zero-trust payment verification notice */}
+                  <div className="p-2 rounded-lg bg-surface-muted text-[10px] text-text-muted flex items-start gap-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                    <p>
+                      Launching your UPI app does not automatically mark your order as paid. The seller independently verifies receipt before handing over your food.
                     </p>
                   </div>
-                )}
-              </div>
-
-              {/* Direct UPI ID & Mobile Number Fallback */}
-              <div className="p-2.5 rounded-xl bg-surface border border-border-subtle space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <span className="text-[10px] text-text-muted">Payee: <strong className="text-text-main font-semibold">{upiName}</strong></span>
-                    <span className="font-mono font-bold text-accent text-xs truncate select-all">{upiId}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyUpi}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
-                      isCopied
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'bg-surface-elevated hover:bg-surface-muted text-text-main border border-border-subtle'
-                    }`}
-                  >
-                    {isCopied ? (
-                      <>
-                        <Check className="w-3 h-3 stroke-[3]" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        <span>Copy UPI</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Mobile Number Transfer */}
-                <div className="flex items-center justify-between pt-1.5 border-t border-border-subtle">
-                  <div className="flex flex-col min-w-0 pr-2">
-                    <span className="text-[10px] text-text-muted flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-emerald-500" />
-                      <span>Pay via Mobile Number:</span>
-                    </span>
-                    <span className="font-mono font-bold text-text-main text-xs">{sellerPhone}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyPhone}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
-                      isCopiedPhone
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'bg-surface-elevated hover:bg-surface-muted text-text-main border border-border-subtle'
-                    }`}
-                  >
-                    {isCopiedPhone ? (
-                      <>
-                        <Check className="w-3 h-3 stroke-[3]" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           )}
 

@@ -45,27 +45,59 @@ public class MainActivity extends BridgeActivity {
                     String s = scheme.toLowerCase();
                     if (s.equals("upi") || s.equals("tez") || s.equals("phonepe") || s.equals("paytmmp")) {
                         try {
-                            Intent intent = new Intent(Intent.ACTION_VIEW, url);
+                            String targetPackage = null;
+                            String app = url.getQueryParameter("app");
+                            if ("gpay".equalsIgnoreCase(app) || s.equals("tez")) {
+                                targetPackage = "com.google.android.apps.nbu.paisa.user";
+                            } else if ("phonepe".equalsIgnoreCase(app) || s.equals("phonepe")) {
+                                targetPackage = "com.phonepe.app";
+                            } else if ("paytm".equalsIgnoreCase(app) || s.equals("paytmmp")) {
+                                targetPackage = "net.one97.paytm";
+                            } else if ("bhim".equalsIgnoreCase(app)) {
+                                targetPackage = "in.org.npci.upiapp";
+                            }
+
+                            // Build clean standard NPCI UPI URI
+                            Uri.Builder cleanBuilder = new Uri.Builder()
+                                    .scheme("upi")
+                                    .authority("pay");
+
+                            for (String key : url.getQueryParameterNames()) {
+                                if (!"app".equalsIgnoreCase(key) && !"package".equalsIgnoreCase(key)) {
+                                    cleanBuilder.appendQueryParameter(key, url.getQueryParameter(key));
+                                }
+                            }
+                            Uri cleanUpiUri = cleanBuilder.build();
+                            String amount = cleanUpiUri.getQueryParameter("am");
+                            String amountLabel = (amount != null && !amount.isEmpty()) ? " ₹" + amount : "";
+
+                            if (targetPackage != null) {
+                                Intent directIntent = new Intent(Intent.ACTION_VIEW, cleanUpiUri);
+                                directIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                directIntent.setPackage(targetPackage);
+
+                                if (directIntent.resolveActivity(getPackageManager()) != null) {
+                                    startActivity(directIntent);
+                                    return true;
+                                }
+                                // Fall back to chooser if target app is missing
+                                Toast.makeText(MainActivity.this, "Selected app not found. Opening available UPI apps...", Toast.LENGTH_SHORT).show();
+                            }
+
+                            Intent intent = new Intent(Intent.ACTION_VIEW, cleanUpiUri);
                             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            // If it's generic upi://, open chooser
-                            if (s.equals("upi")) {
-                                Intent chooser = Intent.createChooser(intent, "Pay with UPI");
-                                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            Intent chooser = Intent.createChooser(intent, "Pay" + amountLabel + " with UPI");
+                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+                            if (chooser.resolveActivity(getPackageManager()) != null) {
                                 startActivity(chooser);
                             } else {
-                                startActivity(intent);
+                                Toast.makeText(MainActivity.this, "No compatible UPI app found. Please scan the QR code or copy the UPI ID.", Toast.LENGTH_LONG).show();
                             }
                             return true;
                         } catch (Exception e) {
-                            try {
-                                Intent fallback = new Intent(Intent.ACTION_VIEW, url);
-                                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                startActivity(Intent.createChooser(fallback, "Pay via UPI App"));
-                                return true;
-                            } catch (Exception ex) {
-                                Toast.makeText(MainActivity.this, "Unable to launch UPI app. Please scan the QR code or copy UPI ID.", Toast.LENGTH_LONG).show();
-                                return true;
-                            }
+                            Toast.makeText(MainActivity.this, "Unable to launch UPI app. Please scan the QR code or copy UPI ID.", Toast.LENGTH_LONG).show();
+                            return true;
                         }
                     }
                     return false;

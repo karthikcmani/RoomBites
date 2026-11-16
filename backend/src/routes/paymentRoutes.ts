@@ -25,6 +25,20 @@ router.get('/credit/ledger', requireAuth, (req: Request, res: Response) => {
   }
 });
 
+// Customer: Submit UPI UTR / Transaction Reference
+router.post('/submit-utr', requireAuth, (req: Request, res: Response) => {
+  try {
+    const { orderId, transactionRef } = req.body;
+    if (!orderId || !transactionRef) {
+      return res.status(400).json({ success: false, error: 'Order ID and transaction reference are required.' });
+    }
+    const order = paymentService.submitUtr(req.user!.id, orderId, transactionRef);
+    res.json({ success: true, order });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 // Admin: Verify Cash / UPI Payment
 router.post('/admin/verify', requireAuth, requireAdmin, (req: Request, res: Response) => {
   try {

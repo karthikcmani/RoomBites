@@ -247,6 +247,12 @@ class ApiClient {
     getMyCreditLedger: () =>
       this.request<{ success: boolean; ledger: CreditLedgerEntry[] }>('/payments/credit/ledger'),
 
+    submitUtr: (orderId: string, transactionRef: string) =>
+      this.request<{ success: boolean; order: Partial<Order> }>('/payments/submit-utr', {
+        method: 'POST',
+        body: JSON.stringify({ orderId, transactionRef })
+      }),
+
     verifyPaymentAdmin: (data: { orderId: string; paymentMethod: PaymentMethod; transactionRef?: string; amountPaise: number }) =>
       this.request<{ success: boolean; payment: any }>('/payments/admin/verify', {
         method: 'POST',

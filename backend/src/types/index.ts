@@ -115,6 +115,7 @@ export interface Order {
   totalPaise: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  transactionRef?: string;
   cancellationReason?: string;
   estimatedDeliveryTime?: string;
   createdAt: string;

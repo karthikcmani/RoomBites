@@ -485,6 +485,7 @@ export class OrderService {
       totalPaise: o.total_paise,
       paymentMethod: o.payment_method as PaymentMethod,
       paymentStatus: o.payment_status,
+      transactionRef: o.transaction_ref || undefined,
       cancellationReason: o.cancellation_reason || undefined,
       estimatedDeliveryTime: o.estimated_delivery_time || undefined,
       createdAt: o.created_at,

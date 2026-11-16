@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { getDb } from '../db/index.js';
 import { ShopSetting, ShopStatus, Announcement } from '../types/index.js';
 import { WebSocketBroker } from '../websocket/server.js';
+import { isValidVpa } from '../utils/upi.js';
 
 export class ShopService {
   private db = getDb();
@@ -74,6 +75,19 @@ export class ShopService {
           auto_schedule_enabled = ?, updated_at = CURRENT_TIMESTAMP
       WHERE seller_id = 'seller_primary'
     `).run(status, note || null, openTime, closeTime, autoSchedule);
+
+    if (data.upiId !== undefined) {
+      const trimmedUpi = data.upiId.trim();
+      if (!isValidVpa(trimmedUpi)) {
+        throw new Error(`INVALID_UPI_ID: "${data.upiId}" is not a valid recipient UPI ID.`);
+      }
+    }
+
+    if (data.upiName !== undefined) {
+      if (!data.upiName.trim()) {
+        throw new Error('INVALID_UPI_NAME: Payee name on bank account cannot be empty.');
+      }
+    }
 
     if (data.emergencyContact !== undefined || data.roomNumber !== undefined || data.shopName !== undefined || data.upiId !== undefined || data.upiName !== undefined) {
       const em = data.emergencyContact !== undefined ? data.emergencyContact.trim() : (current.emergencyContact || '');

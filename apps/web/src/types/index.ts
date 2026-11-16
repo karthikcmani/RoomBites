@@ -104,6 +104,7 @@ export interface Order {
   totalPaise: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  transactionRef?: string;
   cancellationReason?: string;
   createdAt: string;
   items?: OrderItem[];
