@@ -1,140 +1,118 @@
 import React, { useState } from 'react';
-import { Coffee, ShieldCheck, User, LogIn, Settings, Sun, Moon } from 'lucide-react';
+import { Coffee, ShieldCheck, Sun, Moon, Laptop, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useRealtime } from '../contexts/RealtimeContext.js';
 import { useTheme } from '../contexts/ThemeContext.js';
 import { ServerSettingsModal } from './ServerSettingsModal.js';
+import { NavTab } from './BottomNav.js';
 
 interface NavbarProps {
-  currentView: 'menu' | 'orders' | 'admin';
-  onNavigate: (view: 'menu' | 'orders' | 'admin') => void;
+  currentTab: NavTab;
+  onNavigate: (tab: NavTab) => void;
   onOpenAuth: () => void;
-  onOpenCredit: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentView,
+  currentTab,
   onNavigate,
-  onOpenAuth,
-  onOpenCredit
+  onOpenAuth
 }) => {
-  const { user, profile } = useAuth();
-  const { isConnected, shopSettings } = useRealtime();
-  const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const { shopSettings } = useRealtime();
+  const { mode, resolvedTheme, toggleTheme } = useTheme();
   const [isServerSettingsOpen, setIsServerSettingsOpen] = useState(false);
 
   const status = shopSettings?.status || 'AVAILABLE';
 
+  const getStatusBadge = () => {
+    switch (status) {
+      case 'AVAILABLE':
+        return { label: 'Open', dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10' };
+      case 'BUSY':
+        return { label: 'Busy', dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500/10' };
+      case 'SLEEPING':
+        return { label: 'Resting', dot: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-500/10' };
+      case 'CLOSED':
+      default:
+        return { label: 'Closed', dot: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-500/10' };
+    }
+  };
+
+  const badge = getStatusBadge();
+
   return (
     <>
       <header
-        className="sticky top-0 z-40 bg-slate-950/85 backdrop-blur-xl border-b border-slate-800/80 px-4 pb-2.5 transition-all"
+        className="sticky top-0 z-30 bg-surface/90 dark:bg-surface/90 backdrop-blur-md border-b border-border-subtle transition-colors"
         style={{
-          paddingTop: 'calc(max(env(safe-area-inset-top, 0px), var(--app-safe-top, 0px)) + 0.65rem)'
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 0.35rem)'
         }}
       >
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          {/* Minimal Brand with Live Status Dot */}
+        <div className="max-w-4xl mx-auto px-4 h-12 flex items-center justify-between">
+          {/* Brand Mark + Name + Compact Status */}
           <div
             onClick={() => onNavigate('menu')}
-            className="flex items-center gap-2 cursor-pointer select-none active:scale-95 transition-transform"
+            className="flex items-center gap-2 cursor-pointer select-none active:scale-[0.98] transition-transform"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-slate-950 shadow-md shadow-amber-500/20">
-              <Coffee className="w-4 h-4 stroke-[2.5]" />
+            <div className="w-7 h-7 rounded-lg bg-accent text-slate-950 flex items-center justify-center font-bold shadow-sm">
+              <Coffee className="w-3.5 h-3.5 stroke-[2.8]" />
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-base tracking-tight text-white">
+              <span className="font-bold text-sm tracking-tight text-text-main">
                 RoomBites
               </span>
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  status === 'AVAILABLE'
-                    ? 'bg-emerald-400 animate-pulse'
-                    : status === 'BUSY'
-                    ? 'bg-amber-400'
-                    : 'bg-indigo-400'
-                }`}
-                title={`Mess is ${status.toLowerCase()}`}
-              />
+              <span className="text-[10px] font-semibold text-text-dim px-1 py-0.2 rounded bg-surface-muted">
+                RIT
+              </span>
+            </div>
+
+            {/* Micro Shop Status Pill */}
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge.bg} ${badge.text}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${badge.dot} ${status === 'AVAILABLE' ? 'animate-pulse' : ''}`} />
+              <span>{badge.label}</span>
             </div>
           </div>
 
-          {/* Action Controls */}
-          <div className="flex items-center gap-2">
-            {/* Theme Switcher Button */}
-            <button
-              onClick={toggleTheme}
-              className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-all active:scale-90"
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
-              ) : (
-                <Moon className="w-3.5 h-3.5 text-indigo-500" />
-              )}
-            </button>
-
-            {user ? (
-              <>
-                {user.role === 'ADMIN' && (
-                  <button
-                    onClick={() => onNavigate(currentView === 'admin' ? 'menu' : 'admin')}
-                    className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all ${
-                      currentView === 'admin'
-                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
-                        : 'bg-slate-900 text-amber-400 border-amber-500/30 hover:border-amber-500/60'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    Admin
-                  </button>
-                )}
-
-                <button
-                  onClick={() => onNavigate(currentView === 'orders' ? 'menu' : 'orders')}
-                  className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg border transition-all ${
-                    currentView === 'orders'
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
-                      : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  Orders
-                </button>
-
-                {profile?.outstandingBalancePaise && profile.outstandingBalancePaise > 0 ? (
-                  <button
-                    onClick={onOpenCredit}
-                    className="text-[11px] font-bold px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-colors"
-                  >
-                    Dues: ₹{(profile.outstandingBalancePaise / 100).toFixed(0)}
-                  </button>
-                ) : null}
-
-                <button
-                  onClick={onOpenAuth}
-                  className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 hover:border-amber-500/50 transition-colors"
-                >
-                  <User className="w-3 h-3 text-amber-400" />
-                  <span className="max-w-[80px] truncate">
-                    {profile?.roomNumber || 'Account'}
-                  </span>
-                </button>
-              </>
-            ) : (
+          {/* Right Action Icons: Theme, Admin, Settings */}
+          <div className="flex items-center gap-1.5">
+            {/* Admin Dashboard shortcut */}
+            {user?.role === 'ADMIN' && (
               <button
-                onClick={onOpenAuth}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400 active:scale-95 transition-all shadow-md shadow-amber-500/20"
+                onClick={() => onNavigate(currentTab === 'admin' ? 'menu' : 'admin')}
+                className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg transition-all ${
+                  currentTab === 'admin'
+                    ? 'bg-accent text-slate-950 shadow-sm'
+                    : 'bg-surface-elevated text-text-muted hover:text-text-main'
+                }`}
+                title="Seller Operations Center"
               >
-                <LogIn className="w-3.5 h-3.5" />
-                Sign In
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Admin</span>
               </button>
             )}
 
-            {/* Subtle Settings for Mobile Testers */}
+            {/* Modern 3-Way Theme Switcher (Light / Dark / System) */}
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-lg bg-surface-elevated hover:bg-surface-muted text-text-muted hover:text-text-main flex items-center justify-center transition-colors active:scale-95"
+              title={`Appearance: ${mode} (tap to change)`}
+              aria-label="Toggle visual theme"
+            >
+              {mode === 'system' ? (
+                <Laptop className="w-3.5 h-3.5 text-accent" />
+              ) : resolvedTheme === 'dark' ? (
+                <Moon className="w-3.5 h-3.5 text-accent" />
+              ) : (
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
+              )}
+            </button>
+
+            {/* Server Settings (LAN / Dev config) */}
             <button
               onClick={() => setIsServerSettingsOpen(true)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-900 transition-colors"
-              title={isConnected ? 'Server Connected' : 'Server Settings'}
+              className="w-8 h-8 rounded-lg bg-surface-elevated hover:bg-surface-muted text-text-dim hover:text-text-muted flex items-center justify-center transition-colors active:scale-95"
+              title="Connection settings"
+              aria-label="Server settings"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>
@@ -145,6 +123,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <ServerSettingsModal
         isOpen={isServerSettingsOpen}
         onClose={() => setIsServerSettingsOpen(false)}
+        onSaved={() => window.location.reload()}
       />
     </>
   );

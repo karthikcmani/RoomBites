@@ -3,110 +3,103 @@
 @tailwind utilities;
 
 :root {
+  /* Safe-Area Environment Insets */
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --app-safe-top: 0px;
+
+  /* LIGHT THEME (Warm Ivory / Minimal Commerce) */
+  --bg-canvas: #FAF9F6;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F3F2EE;
+  --bg-muted: #EAE8E2;
+  --border-subtle: #E5E3DC;
+  --border-strong: #D2CFC7;
+  --text-primary: #1F2124;
+  --text-secondary: #6B7077;
+  --text-tertiary: #9AA0A6;
+  --accent-primary: #E69500;
+  --accent-hover: #D08500;
+  --accent-surface: rgba(230, 149, 0, 0.08);
+  --accent-text: #C47D00;
+  --state-success: #16A34A;
+  --state-warning: #D97706;
+  --state-danger: #DC2626;
+}
+
+.dark {
+  /* DARK THEME (Premium Charcoal / Midnight Mess) */
+  --bg-canvas: #101318;
+  --bg-surface: #171C24;
+  --bg-elevated: #202733;
+  --bg-muted: #2A3342;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text-primary: #F4F5F7;
+  --text-secondary: #9DA5B2;
+  --text-tertiary: #687182;
+  --accent-primary: #F0AB32;
+  --accent-hover: #F5B84B;
+  --accent-surface: rgba(240, 171, 50, 0.12);
+  --accent-text: #F0AB32;
+  --state-success: #22C55E;
+  --state-warning: #F59E0B;
+  --state-danger: #EF4444;
 }
 
 @layer utilities {
-  /* Hide scrollbar for Chrome, Safari and Opera */
+  /* Scrollbar suppression */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  /* Hide scrollbar for IE, Edge and Firefox */
   .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
   /* Safe Area Helpers */
   .pt-safe {
-    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
   }
   .pb-safe {
-    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
   }
 }
 
 * {
   -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Light Theme Overrides */
-html:not(.dark) body {
-  background-color: #f8fafc;
-  color: #0f172a;
+/* Form controls unified styling */
+input, select, textarea {
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-html:not(.dark) .bg-slate-900 {
-  background-color: #ffffff !important;
-  color: #0f172a;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-surface);
 }
 
-html:not(.dark) .bg-slate-950 {
-  background-color: #f8fafc !important;
-}
-
-html:not(.dark) .bg-slate-950\/85 {
-  background-color: rgba(248, 250, 252, 0.92) !important;
-}
-
-html:not(.dark) .bg-slate-850 {
-  background-color: #f1f5f9 !important;
-}
-
-html:not(.dark) .bg-slate-850\/50 {
-  background-color: rgba(241, 245, 249, 0.6) !important;
-}
-
-html:not(.dark) .border-slate-800,
-html:not(.dark) .border-slate-800\/80 {
-  border-color: #e2e8f0 !important;
-}
-
-html:not(.dark) .border-slate-700 {
-  border-color: #cbd5e1 !important;
-}
-
-html:not(.dark) .text-white {
-  color: #0f172a !important;
-}
-
-html:not(.dark) .text-slate-100,
-html:not(.dark) .text-slate-200 {
-  color: #1e293b !important;
-}
-
-html:not(.dark) .text-slate-300 {
-  color: #334155 !important;
-}
-
-html:not(.dark) .text-slate-400 {
-  color: #64748b !important;
-}
-
-html:not(.dark) .text-slate-500 {
-  color: #94a3b8 !important;
-}
-
-html:not(.dark) input,
-html:not(.dark) select,
-html:not(.dark) textarea {
-  color: #0f172a !important;
-  background-color: #f8fafc !important;
-  border-color: #cbd5e1 !important;
-}
-
-html:not(.dark) input::placeholder,
-html:not(.dark) textarea::placeholder {
-  color: #94a3b8 !important;
+input::placeholder, textarea::placeholder {
+  color: var(--text-tertiary);
 }

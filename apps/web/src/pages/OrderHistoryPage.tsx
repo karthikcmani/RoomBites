@@ -37,9 +37,9 @@ export const OrderHistoryPage: React.FC<OrderHistoryProps> = ({ onSelectOrder, o
     }
   };
 
-  const handleReorder = async (order: Order) => {
+  const handleReorder = async (order: Order, e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      // Fetch latest menu to verify prices and availability
       const prodsRes = await api.products.getProducts();
       const liveProducts = prodsRes.products;
 
@@ -66,17 +66,17 @@ export const OrderHistoryPage: React.FC<OrderHistoryProps> = ({ onSelectOrder, o
 
   if (!user) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-amber-400 mx-auto">
-          <ShoppingBag className="w-6 h-6" />
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-3">
+        <div className="w-10 h-10 rounded-xl bg-surface-elevated flex items-center justify-center text-accent mx-auto">
+          <ShoppingBag className="w-5 h-5" />
         </div>
-        <h3 className="font-bold text-base text-white">Sign In to View Orders</h3>
-        <p className="text-xs text-slate-400">
-          Track active deliveries and review your past midnight orders.
+        <h3 className="font-bold text-sm text-text-main">Sign In to View Orders</h3>
+        <p className="text-xs text-text-muted">
+          Track active room deliveries and review your past midnight orders.
         </p>
         <button
           onClick={onOpenAuth}
-          className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs"
+          className="px-5 py-2 rounded-xl bg-accent text-slate-950 font-bold text-xs active:scale-95 transition-all shadow-sm"
         >
           Sign In with RIT Email
         </button>
@@ -84,87 +84,78 @@ export const OrderHistoryPage: React.FC<OrderHistoryProps> = ({ onSelectOrder, o
     );
   }
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'DELIVERED':
+        return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+      case 'CANCELLED':
+      case 'REJECTED':
+        return 'bg-rose-500/10 text-rose-600 dark:text-rose-400';
+      default:
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold';
+    }
+  };
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-4 pb-20">
+    <div className="max-w-2xl mx-auto px-3.5 py-4 space-y-3 pb-24">
       <div className="flex items-center justify-between">
-        <h2 className="font-extrabold text-lg text-white">Your Order History</h2>
-        <span className="text-xs text-slate-400">{orders.length} orders placed</span>
+        <h2 className="font-bold text-sm text-text-main">Order History</h2>
+        <span className="text-xs text-text-dim">{orders.length} orders placed</span>
       </div>
 
       {isLoading ? (
-        <div className="space-y-3 py-4">
+        <div className="space-y-2 py-2">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-28 rounded-2xl bg-slate-850/50 border border-slate-800 animate-pulse" />
+            <div key={i} className="h-20 rounded-xl bg-surface border border-border-subtle animate-pulse" />
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div className="text-center py-16 space-y-2">
-          <Clock className="w-10 h-10 text-slate-600 mx-auto" />
-          <p className="text-sm font-semibold text-slate-300">No orders placed yet.</p>
-          <p className="text-xs text-slate-500">Your midnight food orders will show up here.</p>
+        <div className="text-center py-12 space-y-2">
+          <ShoppingBag className="w-8 h-8 text-text-dim mx-auto" />
+          <p className="text-xs font-semibold text-text-muted">No orders yet</p>
+          <p className="text-[11px] text-text-dim">Your midnight snacks will appear here once placed.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {orders.map(order => (
             <div
               key={order.id}
-              className="p-4 rounded-2xl bg-slate-850/80 border border-slate-800 hover:border-slate-700 transition-all space-y-3"
+              onClick={() => onSelectOrder(order)}
+              className="p-3 rounded-xl bg-surface border border-border-subtle hover:border-border-strong cursor-pointer transition-all active:scale-[0.99] flex flex-col gap-2"
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-sm text-white">
-                      #{order.orderNumber}
-                    </span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      {order.status}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    {new Date(order.createdAt).toLocaleDateString()} at{' '}
-                    {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <span className="font-extrabold text-sm text-amber-400">
-                    {formatINR(order.totalPaise)}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs text-text-main">#{order.orderNumber}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold uppercase ${getStatusBadge(order.status)}`}>
+                    {order.status}
                   </span>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    {order.paymentMethod} • {order.paymentStatus}
-                  </p>
                 </div>
+                <span className="font-extrabold text-xs text-text-main">{formatINR(order.totalPaise)}</span>
               </div>
 
-              {/* Items summary */}
-              <div className="text-xs text-slate-300 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800/80">
-                {order.items?.map(it => (
-                  <div key={it.id} className="flex justify-between py-0.5">
-                    <span>
-                      {it.quantity}x {it.productName}
-                    </span>
-                    <span className="text-slate-400">{formatINR(it.subtotalPaise)}</span>
-                  </div>
-                ))}
+              <div className="text-[11px] text-text-muted line-clamp-1">
+                {order.items?.map(it => `${it.quantity}x ${it.productName}`).join(', ')}
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  onClick={() => onSelectOrder(order)}
-                  className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
-                >
-                  <span>Track Status</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex items-center justify-between pt-1 border-t border-border-subtle text-[11px] text-text-dim">
+                <div className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>•</span>
+                  <span>Room {order.deliveryRoom}</span>
+                </div>
 
-                <button
-                  onClick={() => handleReorder(order)}
-                  className="px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-bold flex items-center gap-1.5 transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reorder</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => handleReorder(order, e)}
+                    className="flex items-center gap-1 text-[11px] font-bold text-accent hover:underline"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reorder</span>
+                  </button>
+                  <ChevronRight className="w-3.5 h-3.5 text-text-dim" />
+                </div>
               </div>
             </div>
           ))}

@@ -21,7 +21,6 @@ export const CartSheet: React.FC<CartSheetProps> = ({
   const { user, profile, refreshProfile } = useAuth();
 
   const [roomNumber, setRoomNumber] = useState(profile?.roomNumber || '');
-  const [isEditingRoom, setIsEditingRoom] = useState(false);
   const [instructions, setInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
   const [isScheduled, setIsScheduled] = useState(false);
@@ -93,75 +92,71 @@ export const CartSheet: React.FC<CartSheetProps> = ({
   const isCreditBlocked = (profile?.unpaidOrdersCount || 0) > 2;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-surface border border-border-subtle w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-xl overflow-hidden transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 shrink-0">
+        <div className="flex items-center justify-between p-3.5 border-b border-border-subtle shrink-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-extrabold text-base text-white">Your Order Details</h3>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
-              {items.length} items
+            <h3 className="font-bold text-sm text-text-main">Your Order</h3>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-muted text-text-muted">
+              {items.length} {items.length === 1 ? 'item' : 'items'}
             </span>
           </div>
           <button
             onClick={() => setIsCartOpen(false)}
-            className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white"
+            className="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center text-text-muted hover:text-text-main transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Scrollable Body */}
-        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+        <div className="p-3.5 overflow-y-auto space-y-3.5 flex-1 text-xs">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* Items List */}
-          <div className="space-y-2.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Items
-            </label>
+          {/* Cart Items List */}
+          <div className="space-y-2">
             {items.map((it, idx) => (
               <div
                 key={`${it.product.id}-${idx}`}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-850 border border-slate-800"
+                className="flex items-center justify-between p-2.5 rounded-xl bg-surface-elevated"
               >
-                <div className="flex-1 min-w-0 pr-2">
-                  <h4 className="font-bold text-xs text-slate-100 truncate">{it.product.name}</h4>
+                <div className="min-w-0 pr-2">
+                  <h4 className="font-semibold text-text-main text-xs truncate">{it.product.name}</h4>
                   {it.selectedOptions && Object.keys(it.selectedOptions).length > 0 && (
-                    <p className="text-[10px] text-amber-400/80">
+                    <p className="text-[10px] text-text-muted">
                       {Object.entries(it.selectedOptions).map(([k, v]) => `${k}: ${v}`).join(' • ')}
                     </p>
                   )}
-                  <p className="text-xs font-extrabold text-amber-400 mt-0.5">
-                    {formatINR(it.subtotalPaise)}
+                  <p className="text-xs font-bold text-text-main mt-0.5">
+                    {formatINR(it.product.pricePaise * it.quantity)}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center rounded-lg bg-surface border border-border-subtle p-0.5">
                     <button
                       onClick={() => updateQuantity(it.product.id, it.quantity - 1, it.selectedOptions)}
-                      className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white"
+                      className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-text-main"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
-                    <span className="text-xs font-bold px-2 text-white">{it.quantity}</span>
+                    <span className="w-5 text-center text-xs font-bold text-text-main">{it.quantity}</span>
                     <button
                       onClick={() => updateQuantity(it.product.id, it.quantity + 1, it.selectedOptions)}
-                      className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white"
+                      className="w-6 h-6 flex items-center justify-center rounded text-accent"
                     >
-                      <Plus className="w-3 h-3" />
+                      <Plus className="w-3 h-3 stroke-[2.5]" />
                     </button>
                   </div>
-
                   <button
                     onClick={() => removeItem(it.product.id, it.selectedOptions)}
-                    className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors"
+                    className="p-1 text-text-dim hover:text-rose-500 transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -170,187 +165,100 @@ export const CartSheet: React.FC<CartSheetProps> = ({
             ))}
           </div>
 
-          {/* Delivery Location - Never re-ask if registered */}
-          {profile?.roomNumber && !isEditingRoom ? (
-            <div className="p-3 rounded-xl bg-slate-850/80 border border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase font-semibold">Delivery To</p>
-                  <p className="text-xs font-bold text-white">{roomNumber || profile.roomNumber}</p>
-                  {profile.phoneNumber && (
-                    <p className="text-[10px] text-slate-400">Ph: {profile.phoneNumber}</p>
-                  )}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditingRoom(true)}
-                className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20"
-              >
-                Change
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                  Delivery Room Number
-                </label>
-                {profile?.roomNumber && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingRoom(false)}
-                    className="text-[10px] text-slate-400 hover:text-slate-200"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-              <input
-                type="text"
-                placeholder="e.g. Men's Hostel B-204"
-                value={roomNumber}
-                onChange={e => setRoomNumber(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-          )}
-
-          {/* Cooking Instructions */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Special Preparation or Delivery Notes
+          {/* Delivery Room */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-text-muted flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-accent" />
+              <span>Delivery Room / Hostel</span>
             </label>
             <input
               type="text"
-              placeholder="e.g. Extra spicy, don't knock loudly, call upon arrival"
+              placeholder="e.g. Room 228, MH2"
+              value={roomNumber}
+              onChange={e => setRoomNumber(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+            />
+          </div>
+
+          {/* Instructions */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-text-muted">
+              Special Instructions (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Extra spicy, no sugar"
               value={instructions}
               onChange={e => setInstructions(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
             />
           </div>
 
           {/* Payment Method Selector */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-amber-400" />
-              Payment Method
-            </label>
-
-            <div className="grid grid-cols-3 gap-2">
-              {/* UPI */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-text-muted">Payment Method</label>
+            <div className="grid grid-cols-3 gap-1.5">
               <button
                 type="button"
                 onClick={() => setPaymentMethod('UPI')}
-                className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-center transition-all ${
+                className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
                   paymentMethod === 'UPI'
-                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
-                    : 'bg-slate-850 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'border-accent bg-accent-surface text-accent font-bold'
+                    : 'border-border-subtle bg-surface hover:bg-surface-elevated text-text-muted'
                 }`}
               >
-                <CreditCard className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-bold">UPI</span>
-                <span className="text-[9px] text-slate-400">QR / GPay</span>
+                <CreditCard className="w-4 h-4" />
+                <span className="text-[10px]">UPI</span>
               </button>
 
-              {/* CASH */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('CASH')}
-                className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-center transition-all ${
+                className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
                   paymentMethod === 'CASH'
-                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
-                    : 'bg-slate-850 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'border-accent bg-accent-surface text-accent font-bold'
+                    : 'border-border-subtle bg-surface hover:bg-surface-elevated text-text-muted'
                 }`}
               >
-                <Banknote className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-bold">Cash</span>
-                <span className="text-[9px] text-slate-400">Pay in Room</span>
+                <Banknote className="w-4 h-4" />
+                <span className="text-[10px]">Cash</span>
               </button>
 
-              {/* CREDIT */}
               <button
                 type="button"
                 onClick={() => setPaymentMethod('CREDIT')}
-                className={`p-3 rounded-xl border flex flex-col items-center gap-1 text-center transition-all ${
+                className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
                   paymentMethod === 'CREDIT'
-                    ? 'bg-indigo-500/15 border-indigo-500 text-indigo-300'
-                    : 'bg-slate-850 border-slate-800 text-slate-400 hover:border-slate-700'
+                    ? 'border-accent bg-accent-surface text-accent font-bold'
+                    : 'border-border-subtle bg-surface hover:bg-surface-elevated text-text-muted'
                 }`}
               >
-                <Clock className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold">Credit</span>
-                <span className="text-[9px] text-slate-400">
-                  {profile?.creditStatus === 'APPROVED' ? 'Approved' : 'Request'}
-                </span>
+                <Clock className="w-4 h-4" />
+                <span className="text-[10px]">Credit</span>
               </button>
             </div>
-
-            {/* Credit Warning / Status */}
-            {paymentMethod === 'CREDIT' && (
-              <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold">Credit Account Status:</span>
-                  <span className="font-extrabold uppercase text-[11px] text-indigo-300">
-                    {profile?.creditStatus || 'DISABLED'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                  <span>Unpaid Dues Count:</span>
-                  <span className={`font-bold ${isCreditBlocked ? 'text-rose-400' : 'text-slate-300'}`}>
-                    {profile?.unpaidOrdersCount || 0} / 2 allowed
-                  </span>
-                </div>
-                {isCreditBlocked && (
-                  <p className="text-[11px] text-rose-400 font-semibold pt-1">
-                    Rule 15: You have more than 2 unpaid orders. Credit checkout is blocked until previous balance is paid.
-                  </p>
-                )}
-                {profile?.creditStatus !== 'APPROVED' && (
-                  <button
-                    onClick={onOpenCredit}
-                    className="mt-1 text-[11px] font-bold text-amber-400 underline hover:text-amber-300 block"
-                  >
-                    Click here to request credit privileges →
-                  </button>
-                )}
-              </div>
+            {paymentMethod === 'CREDIT' && isCreditBlocked && (
+              <p className="text-[10px] text-rose-500 mt-1">
+                2 unpaid dues limit exceeded. Please settle past dues first.
+              </p>
             )}
-          </div>
-
-          {/* Pricing Breakdown */}
-          <div className="p-3 rounded-xl bg-slate-850/80 border border-slate-800 space-y-1 text-xs">
-            <div className="flex justify-between text-slate-400">
-              <span>Items Total</span>
-              <span className="font-bold text-slate-200">{formatINR(subtotalPaise)}</span>
-            </div>
-            <div className="flex justify-between text-slate-400">
-              <span>Hostel Room Delivery</span>
-              <span className="font-bold text-emerald-400 uppercase text-[11px]">FREE (₹0)</span>
-            </div>
-            <div className="border-t border-slate-700/60 pt-1.5 flex justify-between font-extrabold text-sm text-white">
-              <span>Total to Pay</span>
-              <span className="text-amber-400">{formatINR(subtotalPaise)}</span>
-            </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 bg-slate-850 border-t border-slate-800 shrink-0">
+        {/* Footer Checkout CTA */}
+        <div className="p-3.5 border-t border-border-subtle bg-surface shrink-0 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-muted font-medium">Total Amount:</span>
+            <span className="text-base font-extrabold text-text-main">{formatINR(subtotalPaise)}</span>
+          </div>
+
           <button
+            type="button"
             onClick={handlePlaceOrder}
             disabled={isSubmitting || (paymentMethod === 'CREDIT' && isCreditBlocked)}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/25 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-accent text-slate-950 font-extrabold text-xs shadow-md shadow-accent/20 hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? (
-              <span>Confirming with Kitchen...</span>
-            ) : (
-              <span>Place Order • {formatINR(subtotalPaise)}</span>
-            )}
+            {isSubmitting ? 'Placing Order...' : user ? `Confirm Order (${formatINR(subtotalPaise)})` : 'Sign in to Place Order'}
           </button>
         </div>
       </div>

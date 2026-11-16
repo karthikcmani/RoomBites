@@ -11,28 +11,29 @@ export const FloatingCartBar: React.FC = () => {
   return (
     <aside
       aria-label="Cart summary"
-      className="fixed left-4 right-4 z-40 max-w-lg mx-auto animate-in slide-in-from-bottom duration-300"
+      className="fixed left-3 right-3 z-35 max-w-md mx-auto animate-in slide-in-from-bottom-2 duration-200"
       style={{
-        bottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0.75rem) + 0.5rem)'
+        bottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0.35rem) + 3.9rem)'
       }}
     >
       <button
+        type="button"
         onClick={() => setIsCartOpen(true)}
-        className="w-full bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 font-extrabold p-3.5 rounded-2xl shadow-xl shadow-amber-500/25 flex items-center justify-between hover:from-amber-400 hover:to-amber-300 transition-all active:scale-[0.98]"
+        className="w-full bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 font-bold px-3.5 py-2.5 rounded-xl shadow-lg flex items-center justify-between active:scale-[0.98] transition-all"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-bold text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-amber-500 dark:bg-slate-950 text-slate-950 dark:text-amber-400 flex items-center justify-center font-extrabold text-[11px]">
             {itemCount}
           </div>
-          <div className="text-left">
-            <p className="text-xs font-semibold text-slate-900/80 leading-none">Your Cart</p>
-            <p className="text-base font-extrabold leading-tight">{formatINR(subtotalPaise)}</p>
+          <div className="text-left flex items-baseline gap-1.5">
+            <span className="text-xs font-medium opacity-90">Cart:</span>
+            <span className="text-sm font-extrabold">{formatINR(subtotalPaise)}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider bg-slate-950/10 px-3 py-1.5 rounded-xl">
+        <div className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider">
           <span>Checkout</span>
-          <ArrowRight className="w-4 h-4 stroke-[3]" />
+          <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
         </div>
       </button>
     </aside>

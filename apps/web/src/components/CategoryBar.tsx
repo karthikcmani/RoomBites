@@ -13,13 +13,14 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   onSelectCategory
 }) => {
   return (
-    <div className="flex items-center gap-2 overflow-x-auto py-2 no-scrollbar scroll-smooth">
+    <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar scroll-smooth">
       <button
+        type="button"
         onClick={() => onSelectCategory(null)}
-        className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
+        className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
           selectedCategoryId === null
-            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
-            : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:border-slate-600'
+            ? 'bg-accent text-slate-950 font-bold shadow-sm'
+            : 'bg-surface-elevated text-text-muted hover:text-text-main hover:bg-surface-muted'
         }`}
       >
         All Menu
@@ -29,12 +30,13 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
         const isSelected = selectedCategoryId === cat.id;
         return (
           <button
+            type="button"
             key={cat.id}
             onClick={() => onSelectCategory(cat.id)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
               isSelected
-                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
-                : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:border-slate-600'
+                ? 'bg-accent text-slate-950 font-bold shadow-sm'
+                : 'bg-surface-elevated text-text-muted hover:text-text-main hover:bg-surface-muted'
             }`}
           >
             {cat.name}

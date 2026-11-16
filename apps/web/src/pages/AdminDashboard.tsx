@@ -15,7 +15,9 @@ import {
   Check,
   Send,
   MessageSquare,
-  MapPin
+  MapPin,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import {
@@ -53,13 +55,18 @@ export const AdminDashboard: React.FC = () => {
   // Settle dues dialog state
   const [settlingCustomer, setSettlingCustomer] = useState<CustomerProfile | null>(null);
   const [settleAmountRupees, setSettleAmountRupees] = useState('');
+  const [settleDescription, setSettleDescription] = useState('Cash payment settled in room');
 
   // Seller room & contact location state
-  const [sellerRoom, setSellerRoom] = useState(shopSettings?.roomNumber || "Room 101 (Men's Hostel)");
-  const [sellerPhone, setSellerPhone] = useState(shopSettings?.emergencyContact || '+919876543210');
+  const [sellerRoom, setSellerRoom] = useState(shopSettings?.roomNumber || 'Room 228, MH2');
+  const [sellerPhone, setSellerPhone] = useState(shopSettings?.emergencyContact || '+919847837607');
   const [sellerUpiId, setSellerUpiId] = useState(shopSettings?.upiId || 'anikumaricmani-1@okicici');
   const [sellerUpiName, setSellerUpiName] = useState(shopSettings?.upiName || 'Karthik C Mani');
   const [isEditingSeller, setIsEditingSeller] = useState(false);
+
+  // Announcement state
+  const [newAnnTitle, setNewAnnTitle] = useState('');
+  const [newAnnMessage, setNewAnnMessage] = useState('');
 
   useEffect(() => {
     if (shopSettings?.roomNumber) setSellerRoom(shopSettings.roomNumber);
@@ -78,16 +85,11 @@ export const AdminDashboard: React.FC = () => {
       });
       await refreshSettings();
       setIsEditingSeller(false);
-      alert('Seller details & UPI ID updated & broadcast live to all students!');
+      alert('Seller details & UPI ID updated and broadcast live!');
     } catch (err: any) {
       alert(err.message || 'Failed to update seller details');
     }
   };
-  const [settleDescription, setSettleDescription] = useState('Cash payment settled in room');
-
-  // Announcement state
-  const [newAnnTitle, setNewAnnTitle] = useState('');
-  const [newAnnMessage, setNewAnnMessage] = useState('');
 
   useEffect(() => {
     loadAll();
@@ -99,15 +101,15 @@ export const AdminDashboard: React.FC = () => {
       const [metRes, ordRes, prodRes, custRes] = await Promise.all([
         api.shop.getDashboardMetrics(),
         api.orders.getAdminFeed(),
-        api.products.getAllAdmin(),
+        api.products.getProducts(),
         api.payments.getCustomersAdmin()
       ]);
-      setMetrics(metRes.metrics);
+      setMetrics(metRes.metrics || metRes);
       setOrders(ordRes.orders);
       setProducts(prodRes.products);
       setCustomers(custRes.customers);
     } catch (err) {
-      console.error('Failed to load admin data:', err);
+      console.error('Error loading admin data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -118,17 +120,44 @@ export const AdminDashboard: React.FC = () => {
       await api.shop.updateSettings({ status });
       await refreshSettings();
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to update shop status');
     }
   };
 
-  const handleOrderStatus = async (orderId: string, status: any, reason?: string) => {
+  const handleOrderStatus = async (orderId: string, status: any) => {
     try {
-      const res = await api.orders.updateStatusAdmin(orderId, status, reason);
-      setOrders(prev => prev.map(o => o.id === orderId ? res.order : o));
-      loadAll();
+      await api.orders.updateStatusAdmin(orderId, status);
+      await loadAll();
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to update order status');
+    }
+  };
+
+  const handleRejectOrder = async () => {
+    if (!rejectingOrderId) return;
+    try {
+      await api.orders.updateStatusAdmin(rejectingOrderId, 'REJECTED', rejectionReason);
+      setRejectingOrderId(null);
+      await loadAll();
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject order');
+    }
+  };
+
+  const handleSuggestAlternative = async () => {
+    if (!altOrderId || !altOriginalProdId || !altSuggestedProdId) return;
+    try {
+      await api.orders.suggestAlternativeAdmin(altOrderId, {
+        originalProductId: altOriginalProdId,
+        suggestedProductId: altSuggestedProdId,
+        note: altNote || undefined
+      });
+      setAltOrderId(null);
+      setAltNote('');
+      await loadAll();
+      alert('Alternative suggested to student!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to suggest alternative');
     }
   };
 
@@ -138,124 +167,98 @@ export const AdminDashboard: React.FC = () => {
         orderId: order.id,
         paymentMethod: order.paymentMethod,
         amountPaise: order.totalPaise,
-        transactionRef: 'VERIFIED_BY_ADMIN'
+        transactionRef: `MANUAL_ADMIN_${Date.now()}`
       });
-      loadAll();
+      await loadAll();
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to verify payment');
     }
   };
 
-  const handleSuggestAlternative = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!altOrderId || !altOriginalProdId || !altSuggestedProdId) return;
-
+  const handleToggleStock = async (productId: string, currentStatus: StockStatus) => {
+    const nextStatus: StockStatus = currentStatus === 'IN_STOCK' ? 'OUT_OF_STOCK' : 'IN_STOCK';
     try {
-      await api.orders.suggestAlternativeAdmin(altOrderId, {
-        originalProductId: altOriginalProdId,
-        suggestedProductId: altSuggestedProdId,
-        note: altNote.trim() || undefined
-      });
-      setAltOrderId(null);
-      loadAll();
+      await api.products.updateStock(productId, nextStatus);
+      setProducts(prev => prev.map(p => p.id === productId ? { ...p, stockStatus: nextStatus } : p));
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to update stock');
     }
   };
 
-  const handleToggleStock = async (prodId: string, current: StockStatus) => {
-    const nextStatus: StockStatus = current === 'IN_STOCK' ? 'OUT_OF_STOCK' : 'IN_STOCK';
+  const handleSetCreditStatus = async (userId: string, status: any) => {
     try {
-      const res = await api.products.updateStock(prodId, nextStatus);
-      setProducts(prev => prev.map(p => p.id === prodId ? res.product : p));
+      await api.payments.setCreditStatusAdmin(userId, status);
+      await loadAll();
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to set credit status');
     }
   };
 
-  const handleSetCreditStatus = async (userId: string, status: 'APPROVED' | 'REVOKED' | 'DISABLED') => {
-    try {
-      const res = await api.payments.setCreditStatusAdmin(userId, status);
-      setCustomers(prev => prev.map(c => c.userId === userId ? res.profile : c));
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
-  const handleSettleDues = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSettleCash = async () => {
     if (!settlingCustomer || !settleAmountRupees) return;
     const amountPaise = Math.round(parseFloat(settleAmountRupees) * 100);
+    if (isNaN(amountPaise) || amountPaise <= 0) {
+      alert('Enter a valid amount');
+      return;
+    }
 
     try {
-      const res = await api.payments.settleDuesAdmin(
-        settlingCustomer.userId,
-        amountPaise,
-        settleDescription
-      );
-      setCustomers(prev => prev.map(c => c.userId === settlingCustomer.userId ? res.profile : c));
+      await api.payments.settleDuesAdmin(settlingCustomer.userId, amountPaise, settleDescription || undefined);
       setSettlingCustomer(null);
       setSettleAmountRupees('');
-      loadAll();
+      await loadAll();
+      alert('Cash settlement recorded successfully!');
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to settle dues');
     }
   };
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAnnTitle || !newAnnMessage) return;
+    if (!newAnnTitle.trim() || !newAnnMessage.trim()) return;
 
     try {
       await api.shop.createAnnouncement({
-        title: newAnnTitle,
-        message: newAnnMessage,
-        badgeType: 'SPECIAL'
+        title: newAnnTitle.trim(),
+        message: newAnnMessage.trim()
       });
       setNewAnnTitle('');
       setNewAnnMessage('');
-      alert('Announcement broadcasted to student screens.');
+      alert('Announcement broadcast live to all students!');
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Failed to broadcast announcement');
     }
   };
 
-  const activeOrders = orders.filter(o =>
-    ['PLACED', 'AWAITING_APPROVAL', 'ACCEPTED', 'PAYMENT_PENDING', 'PAID', 'PREPARING', 'OUT_FOR_DELIVERY'].includes(o.status)
-  );
+  const activeOrders = orders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED' && o.status !== 'REJECTED');
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6 pb-24">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-4xl mx-auto px-3.5 py-3 space-y-3 pb-24 text-xs">
+      {/* Operations Command Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-1">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-extrabold text-xl text-white">Seller Command Center</h1>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-              Admin
-            </span>
-          </div>
-          <p className="text-xs text-slate-400">Night Mess Operations • Hostel Room Deliveries</p>
+          <h2 className="font-extrabold text-sm sm:text-base text-text-main">Seller Operations Center</h2>
+          <p className="text-[11px] text-text-muted">RIT Night Mess • Hostel Room Deliveries</p>
         </div>
 
-        {/* Emergency Kitchen Status Controls */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-850 border border-slate-800">
+        {/* Live Shop Availability Controls */}
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-elevated border border-border-subtle self-start sm:self-auto">
           {(['AVAILABLE', 'BUSY', 'SLEEPING', 'CLOSED'] as ShopStatus[]).map(st => {
             const isCurrent = shopSettings?.status === st;
             return (
               <button
                 key={st}
                 onClick={() => handleUpdateShopStatus(st)}
-                className={`text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all ${
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
                   isCurrent
                     ? st === 'AVAILABLE'
-                      ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-md shadow-emerald-500/20'
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-xs'
                       : st === 'BUSY'
-                      ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md shadow-amber-500/20'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
                       : st === 'SLEEPING'
-                      ? 'bg-indigo-500 text-white font-extrabold shadow-md shadow-indigo-500/20'
-                      : 'bg-rose-500 text-white font-extrabold shadow-md shadow-rose-500/20'
-                    : 'text-slate-400 hover:text-white'
+                      ? 'bg-indigo-600 text-white font-black shadow-xs'
+                      : 'bg-rose-600 text-white font-black shadow-xs'
+                    : 'text-text-muted hover:text-text-main'
                 }`}
               >
                 {st}
@@ -265,245 +268,235 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Seller Room & Contact Location Bar */}
-      <div className="p-3.5 rounded-2xl bg-slate-850 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-slate-300">
-          <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-          <span>
-            Mess Location: <strong className="text-white font-bold">{shopSettings?.roomNumber || "Room 101 (Men's Hostel)"}</strong>
+      {/* Seller Location & UPI Details Strip */}
+      <div className="p-3 rounded-xl bg-surface border border-border-subtle flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-text-muted text-[11px] truncate">
+          <MapPin className="w-3.5 h-3.5 text-accent shrink-0" />
+          <span className="truncate">
+            Mess: <strong className="text-text-main font-semibold">{shopSettings?.roomNumber || 'Room 228, MH2'}</strong>
           </span>
-          <span className="text-slate-600 hidden sm:inline">•</span>
-          <span>
-            Contact: <strong className="text-white font-bold">{shopSettings?.emergencyContact || "+919876543210"}</strong>
+          <span className="opacity-40">•</span>
+          <span className="truncate">
+            Contact: <strong className="text-text-main font-semibold">{shopSettings?.emergencyContact || '+919847837607'}</strong>
+          </span>
+          <span className="opacity-40 hidden sm:inline">•</span>
+          <span className="truncate hidden sm:inline">
+            UPI: <strong className="text-accent font-mono font-semibold">{shopSettings?.upiId || 'anikumaricmani-1@okicici'}</strong>
           </span>
         </div>
         <button
           onClick={() => setIsEditingSeller(!isEditingSeller)}
-          className="text-[11px] font-bold px-3 py-1.5 rounded-xl bg-slate-800 text-amber-400 hover:bg-slate-750 border border-amber-500/30 transition-all shadow-sm"
+          className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-surface-elevated text-accent hover:bg-surface-muted border border-border-subtle transition-all shrink-0"
         >
-          {isEditingSeller ? 'Cancel' : 'Edit Room & Contact'}
+          {isEditingSeller ? 'Cancel' : 'Edit Location & UPI'}
         </button>
       </div>
 
+      {/* Expandable Seller Location & UPI Editor */}
       {isEditingSeller && (
-        <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/40 space-y-3 animate-in fade-in">
+        <div className="p-3.5 rounded-xl bg-surface border border-border-subtle space-y-2.5 animate-in fade-in">
           <div>
-            <h4 className="font-bold text-xs text-white">Update Mess Room & Contact Phone</h4>
-            <p className="text-[11px] text-slate-400">Updates will be broadcasted live to all student devices instantly.</p>
+            <h4 className="font-bold text-xs text-text-main">Update Mess Details & UPI Account</h4>
+            <p className="text-[10px] text-text-muted">Changes are synchronized live to all customer devices.</p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Hostel Room Number / Building</label>
+              <label className="text-[10px] font-semibold text-text-muted block mb-0.5">Room & Building</label>
               <input
                 type="text"
                 value={sellerRoom}
                 onChange={e => setSellerRoom(e.target.value)}
-                placeholder="e.g. Room 101 (Men's Hostel)"
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                placeholder="e.g. Room 228, MH2"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Emergency Phone / WhatsApp</label>
+              <label className="text-[10px] font-semibold text-text-muted block mb-0.5">Contact Phone</label>
               <input
                 type="text"
                 value={sellerPhone}
                 onChange={e => setSellerPhone(e.target.value)}
-                placeholder="e.g. +919876543210"
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                placeholder="e.g. +919847837607"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">UPI ID for Payments</label>
+              <label className="text-[10px] font-semibold text-text-muted block mb-0.5">UPI ID for Payments</label>
               <input
                 type="text"
                 value={sellerUpiId}
                 onChange={e => setSellerUpiId(e.target.value)}
                 placeholder="e.g. anikumaricmani-1@okicici"
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-400"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs font-mono text-accent"
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Payee Name on UPI Bank Account</label>
+              <label className="text-[10px] font-semibold text-text-muted block mb-0.5">Payee Name on Bank Account</label>
               <input
                 type="text"
                 value={sellerUpiName}
                 onChange={e => setSellerUpiName(e.target.value)}
                 placeholder="e.g. Karthik C Mani"
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
               />
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-1.5 pt-1">
             <button
               onClick={() => setIsEditingSeller(false)}
-              className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white"
+              className="px-2.5 py-1 rounded-lg text-xs text-text-muted hover:text-text-main"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveSellerInfo}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors shadow-md"
+              className="px-3 py-1 rounded-lg text-xs font-bold bg-accent text-slate-950 transition-opacity hover:opacity-95 shadow-xs"
             >
-              Save & Broadcast Live
+              Save & Broadcast
             </button>
           </div>
         </div>
       )}
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-1">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Today's Orders</span>
-            <ShoppingBag className="w-4 h-4 text-amber-400" />
+      {/* Operational Metrics Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="p-3 rounded-xl bg-surface border border-border-subtle">
+          <div className="flex items-center justify-between text-text-muted text-[10px] font-semibold">
+            <span>Today's Orders</span>
+            <ShoppingBag className="w-3.5 h-3.5 text-accent" />
           </div>
-          <p className="text-2xl font-black text-white">{metrics?.todayOrdersCount || 0}</p>
-          <p className="text-[10px] text-slate-500">
-            {metrics?.completedOrdersCount || 0} completed • {metrics?.rejectedOrdersCount || 0} rejected
-          </p>
+          <p className="text-xl font-extrabold text-text-main mt-1">{metrics?.todayOrdersCount || 0}</p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-1">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Today's Sales</span>
-            <DollarSign className="w-4 h-4 text-emerald-400" />
+        <div className="p-3 rounded-xl bg-surface border border-border-subtle">
+          <div className="flex items-center justify-between text-text-muted text-[10px] font-semibold">
+            <span>Realized Sales</span>
+            <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
           </div>
-          <p className="text-2xl font-black text-emerald-400">
+          <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
             {formatINR(metrics?.todaySalesPaise || 0)}
           </p>
-          <p className="text-[10px] text-slate-500">Realized revenue</p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-1">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Outstanding Dues</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+        <div className="p-3 rounded-xl bg-surface border border-border-subtle">
+          <div className="flex items-center justify-between text-text-muted text-[10px] font-semibold">
+            <span>Outstanding Dues</span>
+            <Clock className="w-3.5 h-3.5 text-amber-500" />
           </div>
-          <p className="text-2xl font-black text-amber-400">
-            {formatINR(metrics?.totalOutstandingDuesPaise || 0)}
+          <p className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">
+            {formatINR(metrics?.outstandingBalancePaise || 0)}
           </p>
-          <p className="text-[10px] text-slate-500">Credit owed by students</p>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-1">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-semibold">Online Students</span>
-            <Users className="w-4 h-4 text-indigo-400" />
+        <div className="p-3 rounded-xl bg-surface border border-border-subtle">
+          <div className="flex items-center justify-between text-text-muted text-[10px] font-semibold">
+            <span>Online Students</span>
+            <Users className="w-3.5 h-3.5 text-indigo-500" />
           </div>
-          <p className="text-2xl font-black text-indigo-400">{onlinePresence.length}</p>
-          <p className="text-[10px] text-slate-500">Active real-time sessions</p>
+          <p className="text-xl font-extrabold text-text-main mt-1">{onlinePresence.length}</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar">
+      {/* Tab Navigation Chips */}
+      <div className="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar border-b border-border-subtle pb-2">
         {[
-          { key: 'orders', label: `Active Orders (${activeOrders.length})`, icon: ShoppingBag },
-          { key: 'presence', label: `Live Presence (${onlinePresence.length})`, icon: Users },
-          { key: 'menu', label: 'Inventory & Prices', icon: Coffee },
-          { key: 'credit', label: 'Student Credit Ledger', icon: TrendingUp },
-          { key: 'announcements', label: 'Announcements', icon: MessageSquare }
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isSelected = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as any)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                isSelected
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+          { key: 'orders', label: `Active Orders (${activeOrders.length})` },
+          { key: 'presence', label: `Live Presence (${onlinePresence.length})` },
+          { key: 'menu', label: `Catalog (${products.length})` },
+          { key: 'credit', label: `Credit Ledger (${customers.length})` },
+          { key: 'announcements', label: 'Broadcast' }
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as any)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
+              activeTab === tab.key
+                ? 'bg-accent text-slate-950 font-bold shadow-xs'
+                : 'bg-surface text-text-muted hover:text-text-main hover:bg-surface-elevated'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tab 1: Orders Feed */}
+      {/* TAB 1: Orders Pipeline */}
       {activeTab === 'orders' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm text-slate-200">Active Kitchen Orders</h3>
+            <h3 className="font-bold text-xs text-text-main">Kitchen Order Queue</h3>
             <button
               onClick={loadAll}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-white"
+              className="flex items-center gap-1 text-[11px] text-text-muted hover:text-text-main"
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              <RefreshCw className="w-3 h-3" /> Refresh
             </button>
           </div>
 
           {activeOrders.length === 0 ? (
-            <div className="text-center py-12 rounded-2xl bg-slate-850/50 border border-slate-800">
-              <ShoppingBag className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-400 font-semibold">No active orders right now.</p>
-              <p className="text-[11px] text-slate-500">Incoming student orders will chime automatically.</p>
+            <div className="text-center py-10 rounded-xl bg-surface border border-border-subtle">
+              <ShoppingBag className="w-7 h-7 text-text-dim mx-auto mb-1.5" />
+              <p className="text-xs text-text-muted font-semibold">No active orders right now.</p>
+              <p className="text-[11px] text-text-dim">Incoming student orders will chime automatically.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               {activeOrders.map(order => (
                 <div
                   key={order.id}
-                  className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-3"
+                  className="p-3.5 rounded-xl bg-surface border border-border-subtle space-y-2.5"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-sm text-white">
-                          #{order.orderNumber}
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs text-text-main">#{order.orderNumber}</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400">
                           {order.status}
                         </span>
                       </div>
-                      <p className="text-xs font-bold text-slate-200 mt-1">
-                        Room: <span className="text-amber-400">{order.deliveryRoom}</span>
+                      <p className="text-xs font-bold text-text-main mt-0.5">
+                        Room: <span className="text-accent">{order.deliveryRoom}</span>
                       </p>
-                      <p className="text-[10px] text-slate-400">
-                        Placed by {order.customerProfile?.fullName || 'Student'} • {order.customerProfile?.phoneNumber || 'No phone'}
+                      <p className="text-[10px] text-text-muted">
+                        {order.customerProfile?.fullName || 'Student'} • {order.customerProfile?.phoneNumber || 'No phone'}
                       </p>
                     </div>
 
                     <div className="text-right">
-                      <span className="font-black text-base text-amber-400">
+                      <span className="font-extrabold text-xs sm:text-sm text-text-main">
                         {formatINR(order.totalPaise)}
                       </span>
-                      <p className="text-[10px] font-bold text-slate-400">
+                      <p className="text-[10px] font-bold text-text-muted mt-0.5">
                         {order.paymentMethod} •{' '}
-                        <span className={order.paymentStatus === 'VERIFIED' ? 'text-emerald-400' : 'text-amber-400'}>
+                        <span className={order.paymentStatus === 'VERIFIED' ? 'text-emerald-500' : 'text-amber-500'}>
                           {order.paymentStatus}
                         </span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Items */}
-                  <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800/80 text-xs space-y-1">
+                  {/* Order items */}
+                  <div className="p-2 rounded-lg bg-surface-elevated text-xs space-y-0.5">
                     {order.items?.map(it => (
-                      <div key={it.id} className="flex justify-between">
-                        <span className="font-semibold text-slate-200">
-                          {it.quantity}x {it.productName}
-                        </span>
-                        <span className="text-slate-400">{formatINR(it.subtotalPaise)}</span>
+                      <div key={it.id} className="flex justify-between text-[11px]">
+                        <span className="text-text-main">{it.quantity}x {it.productName}</span>
+                        <span className="text-text-muted">{formatINR(it.subtotalPaise)}</span>
                       </div>
                     ))}
                     {order.specialInstructions && (
-                      <p className="text-[11px] text-amber-300/90 pt-1 italic border-t border-slate-800">
+                      <p className="text-[10px] text-accent pt-1 italic border-t border-border-subtle">
                         Note: "{order.specialInstructions}"
                       </p>
                     )}
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {/* Action transitions */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     {order.status === 'PLACED' && (
                       <>
                         <button
                           onClick={() => handleOrderStatus(order.id, 'ACCEPTED')}
-                          className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs"
+                          className="flex-1 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs shadow-xs"
                         >
                           Accept
                         </button>
@@ -514,13 +507,13 @@ export const AdminDashboard: React.FC = () => {
                               setAltOriginalProdId(order.items[0].productId);
                             }
                           }}
-                          className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs border border-amber-500/30"
+                          className="px-2.5 py-1.5 rounded-lg bg-surface-elevated text-accent font-bold text-xs border border-border-subtle"
                         >
-                          Alternative
+                          Substitute
                         </button>
                         <button
                           onClick={() => setRejectingOrderId(order.id)}
-                          className="px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 font-bold text-xs border border-rose-500/30"
+                          className="px-2.5 py-1.5 rounded-lg bg-surface-elevated hover:bg-rose-500/10 text-rose-500 font-bold text-xs border border-border-subtle"
                         >
                           Reject
                         </button>
@@ -530,7 +523,7 @@ export const AdminDashboard: React.FC = () => {
                     {order.status === 'ACCEPTED' && (
                       <button
                         onClick={() => handleOrderStatus(order.id, 'PREPARING')}
-                        className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs"
+                        className="flex-1 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs shadow-xs"
                       >
                         Start Cooking (Preparing)
                       </button>
@@ -539,7 +532,7 @@ export const AdminDashboard: React.FC = () => {
                     {order.status === 'PREPARING' && (
                       <button
                         onClick={() => handleOrderStatus(order.id, 'OUT_FOR_DELIVERY')}
-                        className="flex-1 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs"
+                        className="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs shadow-xs"
                       >
                         Out for Delivery →
                       </button>
@@ -548,7 +541,7 @@ export const AdminDashboard: React.FC = () => {
                     {order.status === 'OUT_FOR_DELIVERY' && (
                       <button
                         onClick={() => handleOrderStatus(order.id, 'DELIVERED')}
-                        className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs"
+                        className="flex-1 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs shadow-xs"
                       >
                         Mark Delivered ✓
                       </button>
@@ -557,7 +550,7 @@ export const AdminDashboard: React.FC = () => {
                     {order.paymentStatus === 'PENDING' && (
                       <button
                         onClick={() => handleVerifyPayment(order)}
-                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-emerald-400 font-bold text-xs border border-slate-700"
+                        className="px-2.5 py-1.5 rounded-lg bg-surface-elevated text-emerald-600 dark:text-emerald-400 font-bold text-[11px] border border-border-subtle"
                         title="Mark payment verified"
                       >
                         Verify Payment
@@ -571,76 +564,54 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 2: Live Presence */}
+      {/* TAB 2: Live Presence */}
       {activeTab === 'presence' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm text-slate-200">Online Students Roster</h3>
+            <h3 className="font-bold text-xs text-text-main">Connected Students & Guests</h3>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">{onlinePresence.length} connected</span>
+              <span className="text-[11px] text-text-muted">{onlinePresence.length} active</span>
               <button
                 onClick={() => refreshPresence()}
-                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                title="Refresh presence roster"
+                className="p-1 rounded-lg bg-surface-elevated text-text-muted hover:text-text-main"
+                title="Refresh roster"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3 h-3" />
               </button>
             </div>
           </div>
 
           {onlinePresence.length === 0 ? (
-            <div className="text-center py-12 rounded-2xl bg-slate-850/50 border border-slate-800">
-              <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-400">No students currently browsing.</p>
+            <div className="text-center py-10 rounded-xl bg-surface border border-border-subtle text-text-muted">
+              No students currently active.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-850">
+            <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900 border-b border-slate-800 text-slate-400">
+                <thead className="bg-surface-elevated border-b border-border-subtle text-text-muted">
                   <tr>
-                    <th className="p-3">Student Name</th>
-                    <th className="p-3">Room</th>
-                    <th className="p-3">Current Activity</th>
-                    <th className="p-3">Last Ping</th>
+                    <th className="p-2.5">User</th>
+                    <th className="p-2.5">Room</th>
+                    <th className="p-2.5">Status</th>
+                    <th className="p-2.5">Activity</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800 text-slate-200">
-                  {onlinePresence.map(p => {
-                    const isGuest = p.isGuest || p.userId.startsWith('guest_');
-                    const rawTime = p.lastHeartbeat || (p as any).lastSeen || (p as any).lastPing;
-                    let formattedTime = 'Active now';
-                    if (rawTime) {
-                      const d = new Date(typeof rawTime === 'string' && !rawTime.includes('T') ? rawTime.replace(' ', 'T') + 'Z' : rawTime);
-                      if (!isNaN(d.getTime())) {
-                        formattedTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                      }
-                    }
-
-                    return (
-                      <tr key={p.userId} className="hover:bg-slate-800/40">
-                        <td className="p-3 font-bold flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${isGuest ? 'bg-amber-400' : 'bg-emerald-500'} animate-pulse`} />
-                          {isGuest ? (
-                            <span className="flex items-center gap-1.5">
-                              <span className="text-slate-200">Guest Visitor</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 border border-amber-500/30">Browsing</span>
-                            </span>
-                          ) : (
-                            <span className="text-white">{p.name || 'Student'}</span>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          {isGuest ? (
-                            <span className="text-slate-500 italic text-[11px]">Unauthenticated</span>
-                          ) : (
-                            <span className="text-slate-300 font-semibold">{p.roomNumber || 'Room ?'}</span>
-                          )}
-                        </td>
-                        <td className="p-3 font-mono text-[11px] text-amber-400">{p.activity}</td>
-                        <td className="p-3 text-slate-400">{formattedTime}</td>
-                      </tr>
-                    );
-                  })}
+                <tbody className="divide-y divide-border-subtle text-text-main">
+                  {onlinePresence.map(p => (
+                    <tr key={p.userId} className="hover:bg-surface-elevated">
+                      <td className="p-2.5 font-bold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>{p.name || 'Student'}</span>
+                      </td>
+                      <td className="p-2.5 text-text-muted">{p.roomNumber || 'Unknown'}</td>
+                      <td className="p-2.5">
+                        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          Online
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-text-dim text-[11px]">{p.activity}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -648,29 +619,29 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Menu & Inventory */}
+      {/* TAB 3: Catalog & Realtime Stock */}
       {activeTab === 'menu' && (
-        <div className="space-y-4">
-          <h3 className="font-bold text-sm text-slate-200">Catalog & Real-time Stock</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-3">
+          <h3 className="font-bold text-xs text-text-main">Product Inventory & Stock Controls</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {products.map(p => (
               <div
                 key={p.id}
-                className="p-3.5 rounded-2xl bg-slate-850 border border-slate-800 flex items-center justify-between"
+                className="p-3 rounded-xl bg-surface border border-border-subtle flex items-center justify-between gap-2"
               >
-                <div>
-                  <h4 className="font-bold text-xs text-white">{p.name}</h4>
-                  <p className="text-xs font-extrabold text-amber-400">{formatINR(p.pricePaise)}</p>
-                  <p className="text-[10px] text-slate-500">{p.categoryId}</p>
+                <div className="min-w-0 pr-1">
+                  <h4 className="font-bold text-xs text-text-main truncate">{p.name}</h4>
+                  <p className="text-xs font-bold text-text-main mt-0.5">{formatINR(p.pricePaise)}</p>
+                  <p className="text-[10px] text-text-dim">{p.categoryId}</p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="shrink-0">
                   <button
                     onClick={() => handleToggleStock(p.id, p.stockStatus)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
                       p.stockStatus === 'IN_STOCK'
-                        ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-400'
-                        : 'bg-rose-950/80 border-rose-500/30 text-rose-400'
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
                     }`}
                   >
                     {p.stockStatus === 'IN_STOCK' ? 'In Stock' : 'Sold Out'}
@@ -682,52 +653,52 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 4: Student Credit Management */}
+      {/* TAB 4: Student Credit Management */}
       {activeTab === 'credit' && (
-        <div className="space-y-4">
-          <h3 className="font-bold text-sm text-slate-200">Student Credit Roster</h3>
-          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-850">
+        <div className="space-y-3">
+          <h3 className="font-bold text-xs text-text-main">Student Credit Approval & Settlements</h3>
+          <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900 border-b border-slate-800 text-slate-400">
+              <thead className="bg-surface-elevated border-b border-border-subtle text-text-muted">
                 <tr>
-                  <th className="p-3">Student Name</th>
-                  <th className="p-3">Room</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Unpaid Dues</th>
-                  <th className="p-3">Balance Owed</th>
-                  <th className="p-3">Actions</th>
+                  <th className="p-2.5">Student</th>
+                  <th className="p-2.5">Room</th>
+                  <th className="p-2.5">Status</th>
+                  <th className="p-2.5">Unpaid Dues</th>
+                  <th className="p-2.5">Owed</th>
+                  <th className="p-2.5">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-200">
+              <tbody className="divide-y divide-border-subtle text-text-main">
                 {customers.map(c => (
-                  <tr key={c.userId} className="hover:bg-slate-800/40">
-                    <td className="p-3 font-bold">{c.fullName}</td>
-                    <td className="p-3 text-slate-300">{c.roomNumber}</td>
-                    <td className="p-3">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                  <tr key={c.userId} className="hover:bg-surface-elevated">
+                    <td className="p-2.5 font-bold">{c.fullName}</td>
+                    <td className="p-2.5 text-text-muted">{c.roomNumber}</td>
+                    <td className="p-2.5">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
                         c.creditStatus === 'APPROVED'
-                          ? 'bg-emerald-950 border-emerald-500/30 text-emerald-400'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                           : c.creditStatus === 'REQUESTED'
-                          ? 'bg-amber-950 border-amber-500/30 text-amber-400 animate-pulse'
-                          : 'bg-slate-800 border-slate-700 text-slate-400'
+                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 animate-pulse'
+                          : 'bg-surface-muted text-text-dim'
                       }`}>
                         {c.creditStatus}
                       </span>
                     </td>
-                    <td className="p-3 font-bold">
-                      <span className={c.unpaidOrdersCount > 2 ? 'text-rose-400' : 'text-slate-300'}>
+                    <td className="p-2.5 font-bold">
+                      <span className={c.unpaidOrdersCount > 2 ? 'text-rose-500' : 'text-text-muted'}>
                         {c.unpaidOrdersCount} / 2
                       </span>
                     </td>
-                    <td className="p-3 font-black text-amber-400">
+                    <td className="p-2.5 font-extrabold text-accent">
                       {formatINR(c.outstandingBalancePaise)}
                     </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1.5">
+                    <td className="p-2.5">
+                      <div className="flex items-center gap-1">
                         {c.creditStatus === 'REQUESTED' && (
                           <button
                             onClick={() => handleSetCreditStatus(c.userId, 'APPROVED')}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-bold text-[10px]"
+                            className="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold text-[10px]"
                           >
                             Approve
                           </button>
@@ -735,7 +706,7 @@ export const AdminDashboard: React.FC = () => {
                         {c.creditStatus === 'APPROVED' && (
                           <button
                             onClick={() => handleSetCreditStatus(c.userId, 'REVOKED')}
-                            className="px-2 py-1 rounded-lg bg-rose-950 border border-rose-500/30 text-rose-400 font-bold text-[10px]"
+                            className="px-2 py-0.5 rounded bg-surface-muted hover:bg-rose-500/10 text-rose-500 font-bold text-[10px]"
                           >
                             Revoke
                           </button>
@@ -743,9 +714,9 @@ export const AdminDashboard: React.FC = () => {
                         {c.outstandingBalancePaise > 0 && (
                           <button
                             onClick={() => setSettlingCustomer(c)}
-                            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-[10px] border border-slate-700"
+                            className="px-2 py-0.5 rounded bg-accent-surface hover:bg-accent text-accent-text hover:text-slate-950 font-bold text-[10px]"
                           >
-                            Settle Cash
+                            Settle
                           </button>
                         )}
                       </div>
@@ -758,172 +729,154 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 5: Announcements */}
+      {/* TAB 5: Announcements */}
       {activeTab === 'announcements' && (
-        <div className="max-w-md mx-auto space-y-4">
-          <h3 className="font-bold text-sm text-slate-200">Broadcast Announcement</h3>
-          <form onSubmit={handleCreateAnnouncement} className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-3">
+        <div className="max-w-md mx-auto space-y-3">
+          <h3 className="font-bold text-xs text-text-main">Broadcast Notification to All Students</h3>
+          <form onSubmit={handleCreateAnnouncement} className="p-3.5 rounded-xl bg-surface border border-border-subtle space-y-2.5">
             <input
               type="text"
               required
               placeholder="Title (e.g. Fresh Bananas Available Tonight)"
               value={newAnnTitle}
               onChange={e => setNewAnnTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="w-full px-3 py-2 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
             />
             <textarea
               required
               rows={3}
-              placeholder="Message description..."
+              placeholder="Message details..."
               value={newAnnMessage}
               onChange={e => setNewAnnMessage(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="w-full px-3 py-2 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
             />
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs"
+              className="w-full py-2 rounded-lg bg-accent text-slate-950 font-bold text-xs shadow-xs hover:opacity-95"
             >
-              Broadcast to Students
+              Broadcast Notification
             </button>
           </form>
         </div>
       )}
 
-      {/* Reject Reason Dialog */}
-      {rejectingOrderId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-4 space-y-3">
-            <h4 className="font-bold text-sm text-white">Reject Order</h4>
-            <input
-              type="text"
-              value={rejectionReason}
-              onChange={e => setRejectionReason(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white focus:outline-none focus:border-rose-500"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setRejectingOrderId(null)}
-                className="flex-1 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  handleOrderStatus(rejectingOrderId, 'REJECTED', rejectionReason);
-                  setRejectingOrderId(null);
-                }}
-                className="flex-1 py-2 rounded-xl bg-rose-500 text-white font-bold text-xs"
-              >
-                Confirm Reject
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Suggest Alternative Dialog */}
+      {/* Alternative Suggestion Modal */}
       {altOrderId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <form onSubmit={handleSuggestAlternative} className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-4 space-y-3">
-            <h4 className="font-bold text-sm text-white">Suggest Alternative Product</h4>
-            <div className="space-y-2">
-              <label className="text-[11px] text-slate-400 font-bold">Select Replacement Item:</label>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-surface border border-border-subtle w-full max-w-sm rounded-2xl p-4 space-y-3 shadow-xl">
+            <h4 className="font-bold text-sm text-text-main">Suggest Product Alternative</h4>
+            <div>
+              <label className="text-[10px] text-text-muted block mb-1">Select Replacement Product</label>
               <select
                 value={altSuggestedProdId}
                 onChange={e => setAltSuggestedProdId(e.target.value)}
-                required
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
               >
-                <option value="">-- Choose substitute item --</option>
-                {products.filter(p => p.stockStatus === 'IN_STOCK').map(p => (
+                <option value="">Choose product...</option>
+                {products.filter(p => p.id !== altOriginalProdId).map(p => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({formatINR(p.pricePaise)})
                   </option>
                 ))}
               </select>
             </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-400 font-bold">Admin Note to Student:</label>
+            <div>
+              <label className="text-[10px] text-text-muted block mb-1">Note to Student</label>
               <input
                 type="text"
+                placeholder="e.g. Out of Horlicks, Boost available"
                 value={altNote}
                 onChange={e => setAltNote(e.target.value)}
-                placeholder="e.g. Boost is finished, would you like Horlicks instead?"
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
               />
             </div>
-
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
-                type="button"
                 onClick={() => setAltOrderId(null)}
-                className="flex-1 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs"
+                className="flex-1 py-1.5 rounded-lg bg-surface-elevated text-text-muted font-bold text-xs"
               >
                 Cancel
               </button>
               <button
-                type="submit"
-                className="flex-1 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
+                onClick={handleSuggestAlternative}
+                className="flex-1 py-1.5 rounded-lg bg-accent text-slate-950 font-bold text-xs"
               >
-                Send Proposal
+                Send Suggestion
               </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
-      {/* Settle Cash Dues Dialog */}
-      {settlingCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <form onSubmit={handleSettleDues} className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-4 space-y-3">
-            <h4 className="font-bold text-sm text-white">Record Cash Settlement</h4>
-            <p className="text-xs text-slate-400">
-              Student: <strong className="text-white">{settlingCustomer.fullName}</strong> ({settlingCustomer.roomNumber})
-            </p>
-            <p className="text-xs text-amber-400 font-bold">
-              Total Owed: {formatINR(settlingCustomer.outstandingBalancePaise)}
-            </p>
-
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-400">Amount Paid in Rupees (₹):</label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                placeholder="e.g. 50"
-                value={settleAmountRupees}
-                onChange={e => setSettleAmountRupees(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] text-slate-400">Description:</label>
+      {/* Reject Order Modal */}
+      {rejectingOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-surface border border-border-subtle w-full max-w-sm rounded-2xl p-4 space-y-3 shadow-xl">
+            <h4 className="font-bold text-sm text-text-main">Reject Order</h4>
+            <div>
+              <label className="text-[10px] text-text-muted block mb-1">Reason for Rejection</label>
               <input
                 type="text"
-                value={settleDescription}
-                onChange={e => setSettleDescription(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs text-text-main"
               />
             </div>
-
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2 pt-1">
               <button
-                type="button"
-                onClick={() => setSettlingCustomer(null)}
-                className="flex-1 py-2 rounded-xl bg-slate-850 text-slate-300 font-bold text-xs"
+                onClick={() => setRejectingOrderId(null)}
+                className="flex-1 py-1.5 rounded-lg bg-surface-elevated text-text-muted font-bold text-xs"
               >
                 Cancel
               </button>
               <button
-                type="submit"
-                className="flex-1 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs"
+                onClick={handleRejectOrder}
+                className="flex-1 py-1.5 rounded-lg bg-rose-600 text-white font-bold text-xs"
               >
-                Record Payment
+                Confirm Rejection
               </button>
             </div>
-          </form>
+          </div>
+        </div>
+      )}
+
+      {/* Cash Settlement Modal */}
+      {settlingCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-surface border border-border-subtle w-full max-w-sm rounded-2xl p-4 space-y-3 shadow-xl">
+            <h4 className="font-bold text-sm text-text-main">Settle Cash Dues</h4>
+            <p className="text-xs text-text-muted">
+              Student: <strong className="text-text-main">{settlingCustomer.fullName}</strong> ({settlingCustomer.roomNumber})
+            </p>
+            <p className="text-xs text-text-muted">
+              Current Balance: <strong className="text-accent">{formatINR(settlingCustomer.outstandingBalancePaise)}</strong>
+            </p>
+            <div>
+              <label className="text-[10px] text-text-muted block mb-1">Amount Settled in Cash (₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="e.g. 50"
+                value={settleAmountRupees}
+                onChange={e => setSettleAmountRupees(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface border border-border-subtle text-xs text-text-main font-bold"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setSettlingCustomer(null)}
+                className="flex-1 py-1.5 rounded-lg bg-surface-elevated text-text-muted font-bold text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSettleCash}
+                className="flex-1 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs"
+              >
+                Record Settlement
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

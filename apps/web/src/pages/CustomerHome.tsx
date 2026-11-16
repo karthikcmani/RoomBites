@@ -6,7 +6,6 @@ import { useRealtime } from '../contexts/RealtimeContext.js';
 import { ShopStatusBanner } from '../components/ShopStatusBanner.js';
 import { CategoryBar } from '../components/CategoryBar.js';
 import { ProductCard } from '../components/ProductCard.js';
-import { ServerSettingsModal } from '../components/ServerSettingsModal.js';
 
 export const CustomerHome: React.FC = () => {
   const { shopSettings } = useRealtime();
@@ -16,7 +15,6 @@ export const CustomerHome: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -56,7 +54,7 @@ export const CustomerHome: React.FC = () => {
       setProducts(prodsRes.products);
     } catch (err: any) {
       console.error('Failed to load menu data:', err);
-      setLoadError(err.message || 'Unable to connect to server.');
+      setLoadError(err.message || 'Unable to connect to kitchen server.');
     } finally {
       setIsLoading(false);
     }
@@ -65,26 +63,26 @@ export const CustomerHome: React.FC = () => {
   const filteredProducts = products.filter(p => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    return p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q);
+    return p.name.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q));
   });
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0px)+6rem)] space-y-3">
-      {/* Operating Status Banner (Only visible when Kitchen is Sleeping/Busy) */}
+    <div className="max-w-2xl mx-auto px-3.5 py-2.5 pb-24 space-y-2.5">
+      {/* Operating Status Notification (Only visible when Sleeping / Busy / Closed) */}
       <ShopStatusBanner />
 
-      {/* Dynamic Seller Room & Contact Info as updated by Admin */}
-      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-        <div className="flex items-center gap-1.5 text-slate-300">
-          <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span className="text-[11px]">
-            Delivering from: <strong className="text-white font-semibold">{shopSettings?.roomNumber || "Room 101 (Men's Hostel)"}</strong>
+      {/* Compact Delivery Origin Strip */}
+      <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-surface-elevated text-[11px] text-text-muted">
+        <div className="flex items-center gap-1.5 truncate">
+          <MapPin className="w-3.5 h-3.5 text-accent shrink-0" />
+          <span className="truncate">
+            Delivering from: <strong className="text-text-main font-semibold">{shopSettings?.roomNumber || 'Room 228, MH2'}</strong>
           </span>
         </div>
         {shopSettings?.emergencyContact && (
           <a
             href={`tel:${shopSettings.emergencyContact}`}
-            className="flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors"
+            className="flex items-center gap-1 font-bold text-accent shrink-0 hover:underline ml-2"
           >
             <Phone className="w-3 h-3" />
             <span>{shopSettings.emergencyContact}</span>
@@ -92,19 +90,19 @@ export const CustomerHome: React.FC = () => {
         )}
       </div>
 
-      {/* Minimal Search Input */}
+      {/* Minimal Search Field */}
       <div className="relative">
-        <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+        <Search className="w-4 h-4 text-text-dim absolute left-3 top-2.5" />
         <input
           type="text"
           placeholder="Search tea, coffee, snacks, Maggi..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500/50 transition-colors"
+          className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main placeholder-text-dim focus:outline-none transition-colors"
         />
       </div>
 
-      {/* Minimal Category Bar */}
+      {/* Category Filter Chips */}
       <CategoryBar
         categories={categories}
         selectedCategoryId={selectedCategoryId}
@@ -113,48 +111,33 @@ export const CustomerHome: React.FC = () => {
 
       {/* Products Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
           {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="h-24 rounded-xl bg-slate-900/60 border border-slate-800/80 animate-pulse" />
+            <div key={i} className="h-20 rounded-xl bg-surface border border-border-subtle animate-pulse" />
           ))}
         </div>
       ) : loadError ? (
-        <div className="text-center py-12 space-y-3">
-          <p className="text-slate-300 text-xs font-semibold">Unable to connect to kitchen server</p>
-          <div className="flex justify-center gap-2">
-            <button
-              onClick={loadData}
-              className="py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Retry
-            </button>
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="py-1.5 px-3 rounded-lg bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs"
-            >
-              Settings
-            </button>
-          </div>
+        <div className="text-center py-10 space-y-2.5">
+          <p className="text-text-muted text-xs font-semibold">Unable to connect to kitchen server</p>
+          <button
+            onClick={loadData}
+            className="py-1.5 px-3 rounded-lg bg-accent text-slate-950 font-bold text-xs inline-flex items-center gap-1.5 shadow-sm active:scale-95"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
         </div>
       ) : filteredProducts.length === 0 ? (
-        <div className="text-center py-12 space-y-1">
-          <p className="text-slate-400 text-xs font-medium">No items found</p>
-          <p className="text-slate-500 text-[11px]">Try searching for tea or Maggi</p>
+        <div className="text-center py-10 space-y-1">
+          <p className="text-text-muted text-xs font-semibold">No items found</p>
+          <p className="text-text-dim text-[11px]">Try searching for tea, coffee, or snacks</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
           {filteredProducts.map(prod => (
             <ProductCard key={prod.id} product={prod} />
           ))}
         </div>
       )}
-
-      {/* In-app Server Configuration Modal */}
-      <ServerSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        onSaved={loadData}
-      />
     </div>
   );
 };

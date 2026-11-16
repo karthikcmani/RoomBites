@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Mail, Lock, User, MapPin, Phone, LogOut, CheckCircle2, KeyRound, ArrowRight } from 'lucide-react';
+import { X, Mail, Lock, User, MapPin, Phone, LogOut, CheckCircle2, KeyRound, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.js';
 
 interface AuthModalProps {
@@ -10,17 +10,14 @@ interface AuthModalProps {
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const { user, profile, login, register, requestOtp, verifyOtp, updateProfile, logout } = useAuth();
 
-  // Mode: 'login' | 'register_email' | 'register_complete' | 'otp_login' | 'profile'
   const [mode, setMode] = useState<'login' | 'register_email' | 'register_complete' | 'otp_login' | 'profile'>(() => {
     if (user) return 'profile';
     return 'login';
   });
 
-  // Login credentials
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  // Register fields
   const [regEmail, setRegEmail] = useState('');
   const [regOtp, setRegOtp] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -28,12 +25,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [regRoomNumber, setRegRoomNumber] = useState('');
   const [regPhone, setRegPhone] = useState('');
 
-  // OTP-only fallback
   const [otpLoginEmail, setOtpLoginEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
 
-  // Edit profile form
   const [editFullName, setEditFullName] = useState(profile?.fullName || '');
   const [editRoomNumber, setEditRoomNumber] = useState(profile?.roomNumber || '');
   const [editPhoneNumber, setEditPhoneNumber] = useState(profile?.phoneNumber || '');
@@ -44,7 +39,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
-  // 1. Password Login
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -60,7 +54,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // 2. Register: Step 1 Send OTP
   const handleRegisterSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -74,7 +67,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setIsLoading(true);
     try {
       await requestOtp(clean);
-      setSuccessMsg(`Verification code sent to ${clean}`);
+      setSuccessMsg(`Verification code dispatched to ${clean}`);
       setMode('register_complete');
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to dispatch verification code.');
@@ -83,7 +76,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // 3. Register: Step 2 Complete Registration
   const handleRegisterComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -94,14 +86,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       return;
     }
     if (!regFullName.trim() || !regRoomNumber.trim() || !regPhone.trim()) {
-      setErrorMsg('Please fill in your name, room number, and phone number.');
+      setErrorMsg('Please enter your full name, hostel room, and phone number.');
       return;
     }
 
     setIsLoading(true);
     try {
       await register({
-        email: regEmail.trim(),
+        email: regEmail.trim().toLowerCase(),
         code: regOtp.trim(),
         password: regPassword,
         fullName: regFullName.trim(),
@@ -110,21 +102,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       });
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Registration failed. Check your OTP and try again.');
+      setErrorMsg(err.message || 'Registration failed.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 4. Fallback OTP Login
-  const handleOtpLoginRequest = async (e: React.FormEvent) => {
+  const handleOtpLoginSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
     setIsLoading(true);
     try {
-      await requestOtp(otpLoginEmail.trim());
+      await requestOtp(otpLoginEmail.trim().toLowerCase());
       setOtpSent(true);
-      setSuccessMsg(`OTP sent to ${otpLoginEmail}`);
+      setSuccessMsg('OTP code sent to your email.');
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to send OTP.');
     } finally {
@@ -137,19 +129,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     setErrorMsg(null);
     setIsLoading(true);
     try {
-      await verifyOtp(otpLoginEmail.trim(), otpCode.trim());
+      await verifyOtp(otpLoginEmail.trim().toLowerCase(), otpCode.trim());
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Invalid or expired OTP.');
+      setErrorMsg(err.message || 'Invalid or expired OTP code.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 5. Update Profile
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
     setIsLoading(true);
     try {
       await updateProfile({
@@ -157,7 +149,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         roomNumber: editRoomNumber.trim(),
         phoneNumber: editPhoneNumber.trim()
       });
-      onClose();
+      setSuccessMsg('Profile updated successfully.');
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to update profile.');
     } finally {
@@ -166,311 +158,249 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-surface border border-border-subtle w-full max-w-sm rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-xl overflow-hidden transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
-          <h3 className="font-bold text-sm text-white">
-            {user
-              ? 'Student Profile'
-              : mode === 'login'
-              ? 'Sign In to RoomBites'
-              : mode === 'register_email' || mode === 'register_complete'
-              ? 'New Student Registration'
-              : 'Sign In with OTP'}
+        <div className="flex items-center justify-between p-3.5 border-b border-border-subtle shrink-0">
+          <h3 className="font-bold text-sm text-text-main">
+            {user ? 'Student Account' : mode === 'register_complete' || mode === 'register_email' ? 'New Registration' : 'Student Sign In'}
           </h3>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white"
+            className="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center text-text-muted hover:text-text-main transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto no-scrollbar">
+        {/* Scrollable Form Body */}
+        <div className="p-3.5 overflow-y-auto space-y-3 flex-1 text-xs">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex flex-col gap-1">
+            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
-              {successMsg}
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMsg}</span>
             </div>
           )}
 
-          {/* VIEW: Signed-In Profile & Edit */}
+          {/* Logged in Profile View */}
           {user && (
-            <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-slate-850 border border-slate-800 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Email:</span>
-                  <span className="font-semibold text-slate-200">{user.email}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Name:</span>
-                  <span className="font-semibold text-slate-200">{profile?.fullName || 'Student'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Delivery Room:</span>
-                  <span className="font-bold text-amber-400">{profile?.roomNumber || 'Not set'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Phone:</span>
-                  <span className="font-semibold text-slate-200">{profile?.phoneNumber || 'Not set'}</span>
-                </div>
+            <form onSubmit={handleUpdateProfile} className="space-y-3">
+              <div>
+                <label className="text-[10px] font-semibold text-text-muted">Institutional Email</label>
+                <p className="font-mono font-bold text-text-main mt-0.5">{user.email}</p>
               </div>
 
-              {mode === 'profile' ? (
-                <form onSubmit={handleSaveProfile} className="space-y-3 pt-1 border-t border-slate-800">
-                  <p className="text-[11px] font-semibold text-slate-400">Update Delivery Details</p>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Full Name"
-                    value={editFullName}
-                    onChange={e => setEditFullName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Hostel Room (e.g. Room 228)"
-                    value={editRoomNumber}
-                    onChange={e => setEditRoomNumber(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                  <input
-                    type="tel"
-                    required
-                    placeholder="Mobile / WhatsApp Number"
-                    value={editPhoneNumber}
-                    onChange={e => setEditPhoneNumber(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20"
-                    >
-                      {isLoading ? 'Saving...' : 'Save Profile'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { logout(); onClose(); }}
-                      className="px-3 py-2 rounded-xl bg-rose-950/40 text-rose-300 font-bold text-xs border border-rose-500/30 flex items-center gap-1"
-                    >
-                      <LogOut className="w-3.5 h-3.5" /> Logout
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setMode('profile')}
-                    className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 font-bold text-xs border border-slate-700"
-                  >
-                    Edit Details
-                  </button>
-                  <button
-                    onClick={() => { logout(); onClose(); }}
-                    className="px-4 py-2 rounded-xl bg-rose-950/40 text-rose-300 font-bold text-xs border border-rose-500/30 flex items-center gap-1.5"
-                  >
-                    <LogOut className="w-3.5 h-3.5" /> Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* VIEW 1: Password Login (Default) */}
-          {!user && mode === 'login' && (
-            <form onSubmit={handlePasswordLogin} className="space-y-3.5">
-              <div className="space-y-2">
-                <label className="text-[11px] font-semibold text-slate-400 block">RIT Email Address</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="student@rit.ac.in"
-                    value={loginEmail}
-                    onChange={e => setLoginEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[11px] font-semibold text-slate-400 block">Password</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="Enter your password"
-                    value={loginPassword}
-                    onChange={e => setLoginPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all disabled:opacity-50"
-              >
-                {isLoading ? 'Signing In...' : 'Sign In'}
-              </button>
-
-              <div className="pt-2 border-t border-slate-800/80 flex flex-col gap-2 text-center text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setErrorMsg(null);
-                    setSuccessMsg(null);
-                    setMode('register_email');
-                  }}
-                  className="text-amber-400 hover:text-amber-300 font-semibold text-[11px]"
-                >
-                  New to RoomBites? Register Account →
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setErrorMsg(null);
-                    setSuccessMsg(null);
-                    setMode('otp_login');
-                  }}
-                  className="text-slate-500 hover:text-slate-400 text-[10px]"
-                >
-                  Sign in with Email OTP instead
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* VIEW 2: Register Step 1 (Enter Email) */}
-          {!user && mode === 'register_email' && (
-            <form onSubmit={handleRegisterSendOtp} className="space-y-3">
-              <p className="text-xs text-slate-400">
-                Enter your institutional RIT email. We'll send a 6-digit code to verify your account once.
-              </p>
-
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">Full Name</label>
                 <input
-                  type="email"
+                  type="text"
+                  value={editFullName}
+                  onChange={e => setEditFullName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
                   required
-                  placeholder="student@rit.ac.in"
-                  value={regEmail}
-                  onChange={e => setRegEmail(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">Hostel Block & Room</label>
+                <input
+                  type="text"
+                  value={editRoomNumber}
+                  onChange={e => setEditRoomNumber(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">Phone Number</label>
+                <input
+                  type="tel"
+                  value={editPhoneNumber}
+                  onChange={e => setEditPhoneNumber(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-xl bg-accent text-slate-950 font-bold text-xs shadow-sm hover:opacity-95 active:scale-95 transition-all"
               >
-                {isLoading ? 'Sending Code...' : 'Get Verification Code'}
-                <ArrowRight className="w-3.5 h-3.5" />
+                {isLoading ? 'Saving...' : 'Save Profile'}
               </button>
 
-              <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => { logout(); onClose(); }}
+                className="w-full py-2 rounded-xl bg-surface-elevated text-rose-500 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-rose-500/10 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </form>
+          )}
+
+          {/* Mode 1: Standard Password Login */}
+          {!user && mode === 'login' && (
+            <form onSubmit={handlePasswordLogin} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">RIT Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. 25m2576@rit.ac.in"
+                  value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">Password</label>
+                <input
+                  type="password"
+                  placeholder="Enter your password"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 rounded-xl bg-accent text-slate-950 font-bold text-xs shadow-sm hover:opacity-95 active:scale-95 transition-all"
+              >
+                {isLoading ? 'Signing In...' : 'Sign In'}
+              </button>
+
+              <div className="pt-2 border-t border-border-subtle flex flex-col gap-1.5 text-center">
                 <button
                   type="button"
-                  onClick={() => {
-                    setErrorMsg(null);
-                    setMode('login');
-                  }}
-                  className="text-[11px] text-slate-400 hover:text-white"
+                  onClick={() => { setMode('register_email'); setErrorMsg(null); }}
+                  className="text-[11px] text-accent font-semibold hover:underline"
                 >
-                  ← Back to Sign In
+                  New student? Register with @rit.ac.in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMode('otp_login'); setErrorMsg(null); }}
+                  className="text-[11px] text-text-dim hover:text-text-muted"
+                >
+                  Forgot password? Sign in with email OTP
                 </button>
               </div>
             </form>
           )}
 
-          {/* VIEW 3: Register Step 2 (Single-Screen Complete Setup) */}
-          {!user && mode === 'register_complete' && (
-            <form onSubmit={handleRegisterComplete} className="space-y-3">
-              <div className="p-2.5 rounded-xl bg-slate-850/80 border border-slate-800 text-[11px] text-slate-300 flex items-center justify-between">
-                <span>Verifying: <strong className="text-amber-400">{regEmail}</strong></span>
-                <button
-                  type="button"
-                  onClick={() => setMode('register_email')}
-                  className="text-[10px] text-slate-500 hover:text-slate-300"
-                >
-                  Change
-                </button>
+          {/* Mode 2: Register Step 1 (Send OTP) */}
+          {!user && mode === 'register_email' && (
+            <form onSubmit={handleRegisterSendOtp} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">Institutional RIT Email</label>
+                <input
+                  type="email"
+                  placeholder="e.g. yourname@rit.ac.in"
+                  value={regEmail}
+                  onChange={e => setRegEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
+                />
+                <p className="text-[10px] text-text-dim">Only official college domains (@rit.ac.in) are authorized.</p>
               </div>
 
-              <div className="space-y-2">
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 rounded-xl bg-accent text-slate-950 font-bold text-xs shadow-sm hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-1"
+              >
+                <span>{isLoading ? 'Sending OTP...' : 'Send Verification Code'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="pt-2 border-t border-border-subtle text-center">
+                <button
+                  type="button"
+                  onClick={() => { setMode('login'); setErrorMsg(null); }}
+                  className="text-[11px] text-accent font-semibold hover:underline"
+                >
+                  Already registered? Sign in
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Mode 3: Register Step 2 (Complete with OTP & Password) */}
+          {!user && mode === 'register_complete' && (
+            <form onSubmit={handleRegisterComplete} className="space-y-2.5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">6-Digit Code sent to {regEmail}</label>
+                <input
+                  type="text"
+                  placeholder="123456"
+                  maxLength={6}
+                  value={regOtp}
+                  onChange={e => setRegOtp(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs font-mono font-bold text-center tracking-widest bg-surface border border-border-subtle text-text-main"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">Create Password (min. 6 chars)</label>
+                <input
+                  type="password"
+                  placeholder="Choose password"
+                  value={regPassword}
+                  onChange={e => setRegPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Arun Kumar"
+                  value={regFullName}
+                  onChange={e => setRegFullName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-text-muted">Hostel & Room</label>
                   <input
                     type="text"
-                    required
-                    maxLength={6}
-                    placeholder="6-digit OTP from email"
-                    value={regOtp}
-                    onChange={e => setRegOtp(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs font-mono tracking-wider text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    placeholder="Create Password (min 6 chars)"
-                    value={regPassword}
-                    onChange={e => setRegPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Full Name"
-                    value={regFullName}
-                    onChange={e => setRegFullName(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div className="relative">
-                  <MapPin className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Hostel Room (e.g. Room 228)"
+                    placeholder="e.g. 204, MH1"
                     value={regRoomNumber}
                     onChange={e => setRegRoomNumber(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                    required
                   />
                 </div>
-
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-text-muted">Phone Number</label>
                   <input
                     type="tel"
-                    required
-                    placeholder="Mobile / WhatsApp Number"
+                    placeholder="9876543210"
                     value={regPhone}
                     onChange={e => setRegPhone(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                    required
                   />
                 </div>
               </div>
@@ -478,89 +408,62 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 rounded-xl bg-accent text-slate-950 font-bold text-xs shadow-sm hover:opacity-95 active:scale-95 transition-all mt-1"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                {isLoading ? 'Creating Account...' : 'Complete & Sign In'}
+                {isLoading ? 'Registering...' : 'Complete Registration'}
               </button>
-
-              <div className="text-center pt-1">
-                <button
-                  type="button"
-                  onClick={() => setMode('login')}
-                  className="text-[11px] text-slate-400 hover:text-white"
-                >
-                  ← Already registered? Sign In
-                </button>
-              </div>
             </form>
           )}
 
-          {/* VIEW 4: Sign in with OTP fallback */}
+          {/* Mode 4: OTP Login Fallback */}
           {!user && mode === 'otp_login' && (
-            <div className="space-y-3">
-              {!otpSent ? (
-                <form onSubmit={handleOtpLoginRequest} className="space-y-3">
-                  <p className="text-xs text-slate-400">
-                    Receive a one-time login code to your RIT email address.
-                  </p>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="student@rit.ac.in"
-                      value={otpLoginEmail}
-                      onChange={e => setOtpLoginEmail(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20"
-                  >
-                    {isLoading ? 'Sending...' : 'Send OTP'}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleOtpLoginVerify} className="space-y-3">
-                  <div className="relative">
-                    <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      placeholder="6-digit OTP"
-                      value={otpCode}
-                      onChange={e => setOtpCode(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-850 border border-slate-800 text-center font-mono text-sm tracking-widest text-white focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20"
-                  >
-                    {isLoading ? 'Verifying...' : 'Verify & Sign In'}
-                  </button>
-                </form>
+            <form onSubmit={otpSent ? handleOtpLoginVerify : handleOtpLoginSend} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-text-muted">RIT Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. 25m2576@rit.ac.in"
+                  value={otpLoginEmail}
+                  onChange={e => setOtpLoginEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-border-subtle text-text-main"
+                  required
+                  disabled={otpSent}
+                />
+              </div>
+
+              {otpSent && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-text-muted">6-Digit Verification Code</label>
+                  <input
+                    type="text"
+                    placeholder="123456"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs font-mono font-bold text-center tracking-widest bg-surface border border-border-subtle text-text-main"
+                    required
+                  />
+                </div>
               )}
 
-              <div className="text-center pt-1">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 rounded-xl bg-accent text-slate-950 font-bold text-xs shadow-sm hover:opacity-95 active:scale-95 transition-all"
+              >
+                {isLoading ? 'Verifying...' : otpSent ? 'Verify Code & Sign In' : 'Send One-Time Code'}
+              </button>
+
+              <div className="pt-2 border-t border-border-subtle text-center">
                 <button
                   type="button"
-                  onClick={() => {
-                    setErrorMsg(null);
-                    setSuccessMsg(null);
-                    setMode('login');
-                  }}
-                  className="text-[11px] text-slate-400 hover:text-white"
+                  onClick={() => { setMode('login'); setErrorMsg(null); }}
+                  className="text-[11px] text-accent font-semibold hover:underline"
                 >
-                  ← Back to Password Login
+                  Back to Password Login
                 </button>
               </div>
-            </div>
+            </form>
           )}
         </div>
       </div>

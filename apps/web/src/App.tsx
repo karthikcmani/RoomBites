@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 import { CartProvider } from './contexts/CartContext.js';
 import { RealtimeProvider, useRealtime } from './contexts/RealtimeContext.js';
+import { ThemeProvider } from './contexts/ThemeContext.js';
 import { Navbar } from './components/Navbar.js';
+import { BottomNav, NavTab } from './components/BottomNav.js';
 import { FloatingCartBar } from './components/FloatingCartBar.js';
 import { CartSheet } from './components/CartSheet.js';
 import { OrderTrackerModal } from './components/OrderTrackerModal.js';
@@ -14,13 +16,11 @@ import { AdminDashboard } from './pages/AdminDashboard.js';
 import { Order } from './types/index.js';
 import { Bell, X } from 'lucide-react';
 
-import { ThemeProvider } from './contexts/ThemeContext.js';
-
 const AppContent: React.FC = () => {
   const { user } = useAuth();
   const { activeAlerts, dismissAlert } = useRealtime();
 
-  const [currentView, setCurrentView] = useState<'menu' | 'orders' | 'admin'>('menu');
+  const [currentTab, setCurrentTab] = useState<NavTab>('menu');
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCreditOpen, setIsCreditOpen] = useState(false);
   const [activeTrackingOrder, setActiveTrackingOrder] = useState<Order | null>(null);
@@ -29,30 +29,43 @@ const AppContent: React.FC = () => {
     setActiveTrackingOrder(newOrder);
   };
 
+  const handleTabSelect = (tab: NavTab) => {
+    if (tab === 'credit') {
+      setIsCreditOpen(true);
+      return;
+    }
+    if (tab === 'profile') {
+      setIsAuthOpen(true);
+      return;
+    }
+    setCurrentTab(tab);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-canvas text-text-main flex flex-col font-sans selection:bg-accent selection:text-slate-950 transition-colors duration-200">
       {/* Toast Alert Banners */}
       <div
-        className="fixed right-4 z-50 space-y-2 pointer-events-none max-w-sm w-full"
+        className="fixed right-4 left-4 sm:left-auto sm:max-w-sm z-50 space-y-2 pointer-events-none"
         style={{
-          top: 'calc(max(env(safe-area-inset-top, 0px), var(--app-safe-top, 0px)) + 4.25rem)'
+          top: 'calc(max(env(safe-area-inset-top, 0px), 0px) + 3.75rem)'
         }}
       >
         {activeAlerts.map(alert => (
           <div
             key={alert.id}
-            className="pointer-events-auto p-3.5 rounded-2xl bg-slate-850/95 border border-amber-500/40 shadow-2xl backdrop-blur-md flex items-start gap-3 animate-in slide-in-from-top-4 duration-300"
+            className="pointer-events-auto p-3 rounded-xl bg-surface-elevated/95 border border-accent/30 shadow-lg backdrop-blur-md flex items-start gap-2.5 animate-in slide-in-from-top-2 duration-200"
           >
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
-              <Bell className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-lg bg-accent/10 text-accent flex items-center justify-center shrink-0">
+              <Bell className="w-3.5 h-3.5" />
             </div>
             <div className="flex-1 min-w-0">
-              <h5 className="font-bold text-xs text-white">{alert.title}</h5>
-              <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-2">{alert.message}</p>
+              <h5 className="font-semibold text-xs text-text-main">{alert.title}</h5>
+              <p className="text-[11px] text-text-muted mt-0.5 line-clamp-2">{alert.message}</p>
             </div>
             <button
               onClick={() => dismissAlert(alert.id)}
-              className="text-slate-500 hover:text-white"
+              className="text-text-muted hover:text-text-main p-1 transition-colors"
+              aria-label="Dismiss alert"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -60,42 +73,48 @@ const AppContent: React.FC = () => {
         ))}
       </div>
 
-      {/* Main Navbar */}
+      {/* Main Minimal Navbar */}
       <Navbar
-        currentView={currentView}
-        onNavigate={setCurrentView}
+        currentTab={currentTab}
+        onNavigate={handleTabSelect}
         onOpenAuth={() => setIsAuthOpen(true)}
-        onOpenCredit={() => setIsCreditOpen(true)}
       />
 
       {/* Main View Router */}
       <main
         className="flex-1"
         style={{
-          paddingTop: 'calc(max(env(safe-area-inset-top, 0px), var(--app-safe-top, 0px)) + 4.25rem)'
+          paddingBottom: 'calc(max(env(safe-area-inset-bottom, 0px), 0px) + 5rem)'
         }}
       >
-        {currentView === 'menu' && <CustomerHome />}
-        {currentView === 'orders' && (
+        {currentTab === 'menu' && <CustomerHome />}
+        {currentTab === 'orders' && (
           <OrderHistoryPage
             onSelectOrder={order => setActiveTrackingOrder(order)}
             onOpenAuth={() => setIsAuthOpen(true)}
           />
         )}
-        {currentView === 'admin' && (
+        {currentTab === 'admin' && (
           user?.role === 'ADMIN' ? (
             <AdminDashboard />
           ) : (
-            <div className="max-w-md mx-auto py-16 text-center space-y-2">
-              <p className="font-bold text-sm text-rose-400">Restricted Access</p>
-              <p className="text-xs text-slate-400">Only the authorized hostel mess admin can view this dashboard.</p>
+            <div className="max-w-md mx-auto py-16 px-4 text-center space-y-2">
+              <p className="font-semibold text-sm text-rose-500">Restricted Access</p>
+              <p className="text-xs text-text-muted">Only the authorized mess admin can access this command center.</p>
             </div>
           )
         )}
       </main>
 
-      {/* Persistent Floating Cart Bar (Customer Menu View) */}
-      {currentView === 'menu' && <FloatingCartBar />}
+      {/* Persistent Floating Cart Pill (Menu view only) */}
+      {currentTab === 'menu' && <FloatingCartBar />}
+
+      {/* Mobile-first Bottom Navigation Bar */}
+      <BottomNav
+        currentTab={currentTab}
+        onSelectTab={handleTabSelect}
+        onOpenAuth={() => setIsAuthOpen(true)}
+      />
 
       {/* Modals & Slide-out Drawers */}
       <CartSheet
@@ -118,7 +137,9 @@ const AppContent: React.FC = () => {
 
       <CreditModal
         isOpen={isCreditOpen}
-        onClose={() => setIsCreditOpen(false)}
+        onClose={() => {
+          setIsCreditOpen(false);
+        }}
         onOpenAuth={() => setIsAuthOpen(true)}
       />
     </div>

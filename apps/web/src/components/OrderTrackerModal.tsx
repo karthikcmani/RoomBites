@@ -130,47 +130,47 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-t-3xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+      <div className="bg-surface border border-border-subtle w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 shrink-0">
+        <div className="flex items-center justify-between p-3.5 border-b border-border-subtle shrink-0">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-extrabold text-base text-white">Order #{order.orderNumber}</h3>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+              <h3 className="font-bold text-sm text-text-main">Order #{order.orderNumber}</h3>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
                 isTerminated
-                  ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
               }`}>
                 {order.status}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">Delivering to {order.deliveryRoom}</p>
+            <p className="text-[11px] text-text-muted mt-0.5">Delivering to {order.deliveryRoom}</p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white"
+            className="w-7 h-7 rounded-lg bg-surface-elevated flex items-center justify-center text-text-muted hover:text-text-main transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+        <div className="p-3.5 space-y-3.5 overflow-y-auto flex-1 text-xs">
           {errorMsg && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs">
               {errorMsg}
             </div>
           )}
 
           {/* Alternative Suggestion Banner */}
           {order.status === 'AWAITING_APPROVAL' && order.alternative && (
-            <div className="p-4 rounded-2xl bg-amber-950/50 border border-amber-500/40 text-amber-200 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 space-y-2.5">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-accent shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-bold text-sm text-amber-300">Seller Proposed an Alternative</h4>
-                  <p className="text-xs text-slate-300 mt-0.5">
+                  <h4 className="font-bold text-xs text-text-main">Seller Proposed an Alternative</h4>
+                  <p className="text-[11px] text-text-muted mt-0.5">
                     {order.alternative.adminNote || 'The requested item is out of stock. Would you like this substitute?'}
                   </p>
                 </div>
@@ -180,14 +180,14 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                 <button
                   onClick={() => handleAlternativeResponse('ACCEPT')}
                   disabled={isProcessing}
-                  className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow-md shadow-amber-500/20"
+                  className="flex-1 py-1.5 rounded-lg bg-accent text-slate-950 font-bold text-xs transition-opacity hover:opacity-95"
                 >
                   Accept Suggestion
                 </button>
                 <button
                   onClick={() => handleAlternativeResponse('REJECT')}
                   disabled={isProcessing}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors"
+                  className="px-3 py-1.5 rounded-lg bg-surface-elevated text-text-muted font-bold text-xs border border-border-subtle"
                 >
                   Decline
                 </button>
@@ -197,34 +197,34 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
           {/* Stepper */}
           {!isTerminated && (
-            <div className="py-2 space-y-4">
+            <div className="py-1 space-y-3">
               {steps.map((step, idx) => {
                 const isPassed = currentIndex >= idx;
                 const isCurrent = currentIndex === idx;
 
                 return (
-                  <div key={step.status} className="flex items-center gap-3">
+                  <div key={step.status} className="flex items-center gap-2.5">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                      className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${
                         isCurrent
-                          ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30 scale-110'
+                          ? 'bg-accent text-slate-950 shadow-sm font-bold scale-105'
                           : isPassed
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                          : 'bg-slate-800 text-slate-500'
+                          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-surface-elevated text-text-dim'
                       }`}
                     >
                       {step.icon}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p
-                        className={`text-xs font-bold ${
-                          isCurrent ? 'text-amber-400' : isPassed ? 'text-slate-200' : 'text-slate-500'
+                        className={`text-xs font-semibold ${
+                          isCurrent ? 'text-accent font-bold' : isPassed ? 'text-text-main' : 'text-text-dim'
                         }`}
                       >
                         {step.label}
                       </p>
                       {isCurrent && (
-                        <p className="text-[11px] text-slate-400">In progress right now</p>
+                        <p className="text-[10px] text-text-muted">In progress right now</p>
                       )}
                     </div>
                   </div>
@@ -234,7 +234,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
           )}
 
           {isTerminated && (
-            <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs">
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs">
               <span className="font-bold">Order was {order.status.toLowerCase()}:</span>{' '}
               {order.cancellationReason || 'No details provided.'}
             </div>
@@ -242,13 +242,13 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
           {/* UPI Payment Assistance */}
           {order.paymentMethod === 'UPI' && order.paymentStatus === 'PENDING' && !isTerminated && (
-            <div className="p-4 rounded-2xl bg-slate-850 border border-slate-800 space-y-3.5">
+            <div className="p-3.5 rounded-xl bg-surface-elevated border border-border-subtle space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
-                  <QrCode className="w-4 h-4 text-amber-400" />
+                <span className="font-bold text-xs text-text-main flex items-center gap-1.5">
+                  <QrCode className="w-4 h-4 text-accent" />
                   UPI Payment Required
                 </span>
-                <span className="font-extrabold text-base text-emerald-400">
+                <span className="font-extrabold text-sm text-text-main">
                   {formatINR(order.totalPaise)}
                 </span>
               </div>
@@ -257,130 +257,130 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleOpenUpi(genericUpiUri)}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-accent text-slate-950 font-extrabold text-xs shadow-md shadow-accent/20 active:scale-[0.98] transition-all cursor-pointer"
               >
                 <span>Pay ₹{amountRupees} via UPI App</span>
-                <ExternalLink className="w-4 h-4 stroke-[2.5]" />
+                <ExternalLink className="w-3.5 h-3.5 stroke-[2.5]" />
               </button>
 
               {/* Quick Direct App Selectors */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleOpenUpi(gpayUri)}
-                  className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-750 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
                 >
-                  <span className="text-amber-400 font-bold">G</span>Pay
+                  <span className="text-amber-500 font-bold">G</span>Pay
                 </button>
                 <button
                   type="button"
                   onClick={() => handleOpenUpi(phonepeUri)}
-                  className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-755 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
                 >
-                  <span className="text-purple-400 font-bold">Phone</span>Pe
+                  <span className="text-purple-500 font-bold">Phone</span>Pe
                 </button>
                 <button
                   type="button"
                   onClick={() => handleOpenUpi(paytmUri)}
-                  className="py-2 px-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-755 text-xs font-semibold text-slate-200 flex items-center justify-center gap-1 active:scale-95 transition-all"
+                  className="py-1.5 px-2 rounded-lg bg-surface hover:bg-surface-muted border border-border-subtle text-xs font-semibold text-text-main flex items-center justify-center gap-1 active:scale-95 transition-all"
                 >
-                  <span className="text-sky-400 font-bold">Pay</span>tm
+                  <span className="text-sky-500 font-bold">Pay</span>tm
                 </button>
               </div>
 
               {/* Dynamic QR Code Card (Solves "Pay via Scanning QR" Paytm Alert) */}
-              <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2.5">
+              <div className="rounded-xl bg-surface border border-border-subtle p-3 space-y-2">
                 <button
                   type="button"
                   onClick={() => setShowQrCode(prev => !prev)}
-                  className="w-full flex items-center justify-between text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                  className="w-full flex items-center justify-between text-xs font-semibold text-text-main transition-colors"
                 >
                   <span className="flex items-center gap-1.5">
-                    <QrCode className="w-3.5 h-3.5 text-amber-400" />
+                    <QrCode className="w-3.5 h-3.5 text-accent" />
                     <span>Scan QR Code (Direct ₹{amountRupees})</span>
                   </span>
-                  {showQrCode ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                  {showQrCode ? <ChevronUp className="w-4 h-4 text-text-dim" /> : <ChevronDown className="w-4 h-4 text-text-dim" />}
                 </button>
 
                 {showQrCode && (
-                  <div className="flex flex-col items-center pt-2 pb-1 space-y-2">
+                  <div className="flex flex-col items-center pt-1 space-y-1.5">
                     {qrCodeDataUrl ? (
-                      <div className="p-3 bg-white rounded-2xl shadow-md border-2 border-amber-500/30">
+                      <div className="p-2 bg-white rounded-xl shadow-sm border border-border-subtle">
                         <img
                           src={qrCodeDataUrl}
                           alt={`Pay ₹${amountRupees} QR`}
-                          className="w-44 h-44 object-contain"
+                          className="w-40 h-40 object-contain"
                         />
                       </div>
                     ) : (
-                      <div className="w-44 h-44 flex items-center justify-center bg-slate-800 rounded-xl text-slate-400 text-xs">
+                      <div className="w-40 h-40 flex items-center justify-center bg-surface-muted rounded-xl text-text-dim text-xs">
                         Loading QR...
                       </div>
                     )}
-                    <p className="text-[10px] text-slate-400 text-center max-w-[240px]">
-                      Scan with Google Pay, PhonePe, Paytm, or choose <strong className="text-slate-200">"Scan QR from Gallery"</strong>
+                    <p className="text-[10px] text-text-muted text-center max-w-[240px]">
+                      Scan with Google Pay, PhonePe, Paytm, or choose <strong className="text-text-main">"Scan from Gallery"</strong>
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Direct UPI ID & Mobile Number Fallback (Solves Paytm Protect Alert) */}
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2 text-xs">
+              {/* Direct UPI ID & Mobile Number Fallback */}
+              <div className="p-2.5 rounded-xl bg-surface border border-border-subtle space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col min-w-0 pr-2">
-                    <span className="text-[10px] text-slate-400">Payee: <strong className="text-slate-200 font-semibold">{upiName}</strong></span>
-                    <span className="font-mono font-bold text-amber-300 text-xs truncate select-all">{upiId}</span>
+                    <span className="text-[10px] text-text-muted">Payee: <strong className="text-text-main font-semibold">{upiName}</strong></span>
+                    <span className="font-mono font-bold text-accent text-xs truncate select-all">{upiId}</span>
                   </div>
                   <button
                     type="button"
                     onClick={handleCopyUpi}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
                       isCopied
-                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                        : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30'
+                        ? 'bg-emerald-500 text-slate-950'
+                        : 'bg-surface-elevated hover:bg-surface-muted text-text-main border border-border-subtle'
                     }`}
                   >
                     {isCopied ? (
                       <>
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <Check className="w-3 h-3 stroke-[3]" />
                         <span>Copied!</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" />
+                        <Copy className="w-3 h-3" />
                         <span>Copy UPI</span>
                       </>
                     )}
                   </button>
                 </div>
 
-                {/* Mobile Number Transfer (Direct Paytm/GPay Contact Option) */}
-                <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/80">
+                {/* Mobile Number Transfer */}
+                <div className="flex items-center justify-between pt-1.5 border-t border-border-subtle">
                   <div className="flex flex-col min-w-0 pr-2">
-                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-emerald-400" />
-                      <span>Pay via Mobile Number (Paytm Protect):</span>
+                    <span className="text-[10px] text-text-muted flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-emerald-500" />
+                      <span>Pay via Mobile Number:</span>
                     </span>
-                    <span className="font-mono font-bold text-emerald-300 text-xs">{sellerPhone}</span>
+                    <span className="font-mono font-bold text-text-main text-xs">{sellerPhone}</span>
                   </div>
                   <button
                     type="button"
                     onClick={handleCopyPhone}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
                       isCopiedPhone
-                        ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                        : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30'
+                        ? 'bg-emerald-500 text-slate-950'
+                        : 'bg-surface-elevated hover:bg-surface-muted text-text-main border border-border-subtle'
                     }`}
                   >
                     {isCopiedPhone ? (
                       <>
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        <Check className="w-3 h-3 stroke-[3]" />
                         <span>Copied!</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy Number</span>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy</span>
                       </>
                     )}
                   </button>
@@ -391,24 +391,24 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
           {/* Cash Payment Assistance */}
           {order.paymentMethod === 'CASH' && order.paymentStatus === 'PENDING' && !isTerminated && (
-            <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/20 text-xs text-emerald-200">
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300">
               <span className="font-bold">Cash on Counter/Delivery:</span> Please keep exact change of{' '}
-              <strong className="text-emerald-300">{formatINR(order.totalPaise)}</strong> ready.
+              <strong className="font-extrabold">{formatINR(order.totalPaise)}</strong> ready.
             </div>
           )}
 
           {/* Order Items Snapshot */}
-          <div className="space-y-2 border-t border-slate-800 pt-3">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <div className="space-y-1.5 border-t border-border-subtle pt-3">
+            <h4 className="text-[10px] font-bold text-text-dim uppercase tracking-wider">
               Ordered Items
             </h4>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {order.items?.map(it => (
                 <div key={it.id} className="flex justify-between text-xs">
-                  <span className="text-slate-300">
+                  <span className="text-text-muted">
                     {it.quantity}x {it.productName}
                   </span>
-                  <span className="font-bold text-slate-200">{formatINR(it.subtotalPaise)}</span>
+                  <span className="font-bold text-text-main">{formatINR(it.subtotalPaise)}</span>
                 </div>
               ))}
             </div>
@@ -417,11 +417,11 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
 
         {/* Footer */}
         {(order.status === 'PLACED' || order.status === 'AWAITING_APPROVAL') && (
-          <div className="p-4 bg-slate-850 border-t border-slate-800 shrink-0">
+          <div className="p-3 bg-surface border-t border-border-subtle shrink-0">
             <button
               onClick={handleCancel}
               disabled={isProcessing}
-              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-rose-950/60 hover:border-rose-500/40 hover:text-rose-300 text-slate-400 font-bold text-xs border border-slate-700 transition-colors"
+              className="w-full py-2 rounded-xl bg-surface-elevated hover:bg-rose-500/15 hover:text-rose-600 dark:hover:text-rose-400 text-text-muted font-bold text-xs border border-border-subtle transition-colors"
             >
               Cancel Order
             </button>
